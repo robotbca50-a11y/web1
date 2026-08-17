@@ -54,53 +54,46 @@ export function AIChatbot() {
     setIsLoading(true);
 
     try {
-      // Get knowledge base from public API (bypasses RLS)
-      const knowledgeRes = await fetch("/api/public/ai-knowledge");
-      const knowledgeJson = await knowledgeRes.json();
-      const knowledge = knowledgeJson.data || [];
-
-      // Build context
-      const knowledgeContext = knowledge
-        ?.map((k: { category: string; topic: string; content: string }) => `[${k.category}] ${k.topic}: ${k.content}`)
-        .join("\n") || "";
-
       // Build conversation history from local state
       const conversationHistory = messages
         .map((m) => `${m.role}: ${m.content}`)
         .join("\n");
 
-      // Smart AI response generation (without external API)
-      const localResponse = generateResponse(
-        userMsg.content,
-        knowledgeContext,
-        conversationHistory
-      );
+      // ===== STEP 1: Always try external AI first =====
+      let finalAnswer: string = "";
+      let responseSource = "ai_api";
 
-      // Check if local response is a template/fallback (not a real answer)
-      const isTemplate = isTemplateResponse(localResponse);
-
-      let finalAnswer: string;
-      let responseSource: string;
-
-      if (isTemplate) {
-        // Local knowledge doesn't know - call external AI to learn!
-        try {
-          const learnRes = await fetch("/api/ai-learn", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question: userMsg.content }),
-          });
-          const learnData = await learnRes.json();
-          finalAnswer = learnData.answer || localResponse;
-          responseSource = learnData.source || "ai_api";
-        } catch {
-          // If AI API fails, use local template but make it more helpful
-          finalAnswer = localResponse;
-          responseSource = "local_fallback";
+      try {
+        const learnRes = await fetch("/api/ai-learn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: userMsg.content }),
+        });
+        const learnData = await learnRes.json();
+        if (learnData.answer && !learnData.answer.includes("belum bisa") && learnData.answer.length > 20) {
+          finalAnswer = learnData.answer;
         }
-      } else {
-        finalAnswer = localResponse;
-        responseSource = "local_knowledge";
+      } catch {
+        // AI API not available, continue to local fallback
+      }
+
+      // ===== STEP 2: If AI failed, try local knowledge base =====
+      if (!finalAnswer) {
+        const knowledgeRes = await fetch("/api/public/ai-knowledge");
+        const knowledgeJson = await knowledgeRes.json();
+        const knowledge = knowledgeJson.data || [];
+        const knowledgeContext = knowledge
+          ?.map((k: { category: string; topic: string; content: string }) => `[${k.category}] ${k.topic}: ${k.content}`)
+          .join("\n") || "";
+
+        const localResponse = generateResponse(userMsg.content, knowledgeContext, conversationHistory);
+        if (!isTemplateResponse(localResponse)) {
+          finalAnswer = localResponse;
+          responseSource = "local_knowledge";
+        } else {
+          finalAnswer = "Maaf, saya belum bisa menjawab pertanyaan ini dengan akurat. AI API belum tersedia. Silakan coba lagi nanti atau tanya tentang topik yang saya kuasai: Excel, Matematika, Coding, Sains, atau Menulis.";
+          responseSource = "fallback";
+        }
       }
 
       const assistantMsg: ChatMessage = {
