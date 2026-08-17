@@ -12,7 +12,6 @@ import { useThemeStore } from "@/store/theme";
 import { useAuthStore } from "@/store/auth";
 import { getTheme } from "@/lib/themes";
 import { Particles } from "@/components/particles";
-import { createClient } from "@/lib/supabase/client";
 
 const adminLinks = [
   { href: "/master/links", label: "Links", icon: Link2 },
@@ -27,6 +26,9 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
   const user = useAuthStore((s) => s.user);
   const isAdmin = useAuthStore((s) => s.isAdmin);
   const loading = useAuthStore((s) => s.loading);
+  const setUser = useAuthStore((s) => s.setUser);
+  const setIsAdmin = useAuthStore((s) => s.setIsAdmin);
+  const setLoading = useAuthStore((s) => s.setLoading);
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
 
@@ -37,6 +39,30 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
       router.push("/master");
     }
   }, [user, isAdmin, loading, router, isLoginPage]);
+
+  // Re-check auth on mount for page refresh scenarios
+  useEffect(() => {
+    if (!loading) return;
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+          setIsAdmin(true);
+        } else {
+          setUser(null);
+          setIsAdmin(false);
+        }
+      } catch {
+        setUser(null);
+        setIsAdmin(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAuth();
+  }, [loading, setUser, setIsAdmin, setLoading]);
 
   if (loading) {
     return (
@@ -54,8 +80,9 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
   if (!user || !isAdmin) return null;
 
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
+    setUser(null);
+    setIsAdmin(false);
     router.push("/master");
   };
 
@@ -78,7 +105,7 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs hidden sm:block" style={{ color: theme.colors.textMuted }}>
-              oktagram
+              {user.username}
             </span>
             <button
               onClick={handleLogout}

@@ -1,11 +1,15 @@
 import { create } from "zustand";
-import { User } from "@supabase/supabase-js";
+
+interface AuthUser {
+  id: string;
+  username: string;
+}
 
 interface AuthStore {
-  user: User | null;
+  user: AuthUser | null;
   isAdmin: boolean;
   loading: boolean;
-  setUser: (user: User | null) => void;
+  setUser: (user: AuthUser | null) => void;
   setIsAdmin: (isAdmin: boolean) => void;
   setLoading: (loading: boolean) => void;
 }

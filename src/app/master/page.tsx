@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Shield, User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
+import { useAuthStore } from "@/store/auth";
 import { getTheme } from "@/lib/themes";
-import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -17,6 +17,8 @@ export default function MasterLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const setUser = useAuthStore((s) => s.setUser);
+  const setIsAdmin = useAuthStore((s) => s.setIsAdmin);
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
 
@@ -26,7 +28,6 @@ export default function MasterLoginPage() {
     setLoading(true);
 
     try {
-      // Step 1: Login via our API
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,11 +42,11 @@ export default function MasterLoginPage() {
         return;
       }
 
-      // Step 2: Set session in browser via Supabase client
-      const supabase = createClient();
-      await supabase.auth.setSession(data.session);
+      // Update auth store
+      setUser(data.user);
+      setIsAdmin(true);
 
-      // Step 3: Redirect to admin panel
+      // Redirect to admin panel
       router.push("/master/links");
     } catch {
       setError("Terjadi kesalahan koneksi");
