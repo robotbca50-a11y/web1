@@ -5,15 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Home, FileText, Radio, Keyboard, MessageSquare,
-  Shield, Palette, LogIn, LogOut, Menu, X, ChevronDown
+  Home, FileText, Radio, Keyboard,
+  Shield, Palette, Menu, X, ChevronDown
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
-import { useAuthStore } from "@/store/auth";
 import { getTheme } from "@/lib/themes";
 import { themes } from "@/lib/themes";
 import { ThemeName } from "@/lib/types";
-import { createClient } from "@/lib/supabase/client";
 
 const userLinks = [
   { href: "/", label: "Home", icon: Home },
@@ -29,19 +27,11 @@ export function Navbar() {
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const theme = getTheme(currentTheme);
-  const user = useAuthStore((s) => s.user);
-  const isAdmin = useAuthStore((s) => s.isAdmin);
 
   useEffect(() => {
     setMobileOpen(false);
     setThemeOpen(false);
   }, [pathname]);
-
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = "/";
-  };
 
   return (
     <nav className="sticky top-0 z-50 glass-strong">
@@ -86,20 +76,6 @@ export function Navbar() {
               </Link>
             );
           })}
-
-          {isAdmin && (
-            <Link
-              href="/master"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all"
-              style={{
-                color: pathname.startsWith("/master") ? theme.colors.accent : theme.colors.textMuted,
-                background: pathname.startsWith("/master") ? `color-mix(in srgb, ${theme.colors.accent} 10%, transparent)` : "transparent",
-              }}
-            >
-              <Shield size={16} />
-              <span>Master</span>
-            </Link>
-          )}
         </div>
 
         {/* Right side */}
@@ -153,29 +129,17 @@ export function Navbar() {
             </AnimatePresence>
           </div>
 
-          {/* Auth */}
-          {user ? (
-            <div className="hidden md:flex items-center gap-2">
-              <span className="text-xs px-2 py-1 rounded-full" style={{ color: theme.colors.textMuted }}>
-                {user.email?.split("@")[0]}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="p-2 rounded-lg hover:bg-[var(--theme-surface)] transition-all"
-              >
-                <LogOut size={16} style={{ color: theme.colors.textMuted }} />
-              </button>
-            </div>
-          ) : (
-            <Link
-              href="/login"
-              className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all"
-              style={{ color: theme.colors.primary }}
-            >
-              <LogIn size={16} />
-              <span>Login</span>
-            </Link>
-          )}
+          {/* Master Panel link */}
+          <Link
+            href="/master"
+            className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all hover:bg-[var(--theme-surface)]"
+            style={{
+              color: pathname.startsWith("/master") ? theme.colors.accent : theme.colors.textMuted,
+            }}
+          >
+            <Shield size={16} />
+            <span>Master</span>
+          </Link>
 
           {/* Mobile menu toggle */}
           <button
@@ -216,37 +180,16 @@ export function Navbar() {
                 );
               })}
 
-              {isAdmin && (
-                <Link
-                  href="/master"
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm"
-                  style={{ color: theme.colors.accent }}
-                >
-                  <Shield size={18} />
-                  <span>Master Panel</span>
-                </Link>
-              )}
-
               <div className="border-t border-[var(--theme-border)] my-2" />
 
-              {user ? (
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400"
-                >
-                  <LogOut size={18} />
-                  <span>Logout</span>
-                </button>
-              ) : (
-                <Link
-                  href="/login"
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm"
-                  style={{ color: theme.colors.primary }}
-                >
-                  <LogIn size={18} />
-                  <span>Login</span>
-                </Link>
-              )}
+              <Link
+                href="/master"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm"
+                style={{ color: pathname.startsWith("/master") ? theme.colors.accent : theme.colors.textMuted }}
+              >
+                <Shield size={18} />
+                <span>Master Panel</span>
+              </Link>
             </div>
           </motion.div>
         )}

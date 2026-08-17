@@ -1,21 +1,20 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard, Link2, Radio, Brain, BarChart3,
-  ArrowLeft, Shield
+  ArrowLeft, Shield, LogOut
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { useAuthStore } from "@/store/auth";
 import { getTheme } from "@/lib/themes";
 import { Particles } from "@/components/particles";
+import { createClient } from "@/lib/supabase/client";
 
 const adminLinks = [
-  { href: "/master", label: "Dashboard", icon: LayoutDashboard },
   { href: "/master/links", label: "Links", icon: Link2 },
   { href: "/master/broadcasts", label: "Broadcasts", icon: Radio },
   { href: "/master/ai-settings", label: "AI Knowledge", icon: Brain },
@@ -31,21 +30,34 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
 
+  const isLoginPage = pathname === "/master";
+
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) {
-      router.push("/login");
+    if (!loading && !isLoginPage && (!user || !isAdmin)) {
+      router.push("/master");
     }
-  }, [user, isAdmin, loading, router]);
+  }, [user, isAdmin, loading, router, isLoginPage]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: theme.colors.background }}>
         <div className="animate-spin w-8 h-8 border-2 border-t-transparent rounded-full" style={{ borderColor: `${theme.colors.primary}40`, borderTopColor: theme.colors.primary }} />
       </div>
     );
   }
 
+  // Login page - no sidebar, just the content
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
+
   if (!user || !isAdmin) return null;
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/master");
+  };
 
   return (
     <div className="min-h-screen">
@@ -56,7 +68,7 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2 text-sm" style={{ color: theme.colors.textMuted }}>
-              <ArrowLeft size={16} /> Kembali
+              <ArrowLeft size={16} /> Web Utama
             </Link>
             <div className="w-px h-6" style={{ background: theme.colors.border }} />
             <div className="flex items-center gap-2">
@@ -64,9 +76,18 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
               <span className="font-bold text-sm" style={{ color: theme.colors.accent }}>Master Panel</span>
             </div>
           </div>
-          <span className="text-xs" style={{ color: theme.colors.textMuted }}>
-            {user.email}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs hidden sm:block" style={{ color: theme.colors.textMuted }}>
+              oktagram
+            </span>
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-lg hover:bg-[var(--theme-surface)] transition-all"
+              title="Logout"
+            >
+              <LogOut size={16} style={{ color: theme.colors.textMuted }} />
+            </button>
+          </div>
         </div>
       </div>
 
