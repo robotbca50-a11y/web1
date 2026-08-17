@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home, FileText, Radio, Keyboard,
-  Shield, Palette, Menu, X, ChevronDown
+  Palette, Menu, X, ChevronDown
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
@@ -129,18 +129,6 @@ export function Navbar() {
             </AnimatePresence>
           </div>
 
-          {/* Master Panel link */}
-          <Link
-            href="/master"
-            className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all hover:bg-[var(--theme-surface)]"
-            style={{
-              color: pathname.startsWith("/master") ? theme.colors.accent : theme.colors.textMuted,
-            }}
-          >
-            <Shield size={16} />
-            <span>Master</span>
-          </Link>
-
           {/* Mobile menu toggle */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
@@ -181,15 +169,6 @@ export function Navbar() {
               })}
 
               <div className="border-t border-[var(--theme-border)] my-2" />
-
-              <Link
-                href="/master"
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm"
-                style={{ color: pathname.startsWith("/master") ? theme.colors.accent : theme.colors.textMuted }}
-              >
-                <Shield size={18} />
-                <span>Master Panel</span>
-              </Link>
             </div>
           </motion.div>
         )}
