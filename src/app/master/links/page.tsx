@@ -17,6 +17,7 @@ export default function LinksPage() {
   const [links, setLinks] = useState<LinkType[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<Partial<LinkType> | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState({
     title: "",
     url: "",
@@ -62,6 +63,8 @@ export default function LinksPage() {
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       if (editingLink?.id) {
         await fetch("/api/admin/links", {
@@ -77,9 +80,11 @@ export default function LinksPage() {
         });
       }
       setIsModalOpen(false);
-      loadLinks();
+      await loadLinks();
     } catch (e) {
       console.warn("Failed to save link:", e);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -247,8 +252,8 @@ export default function LinksPage() {
             <Button variant="ghost" onClick={() => setIsModalOpen(false)}>
               <X size={14} /> Cancel
             </Button>
-            <Button onClick={handleSave}>
-              <Save size={14} /> {editingLink ? "Update" : "Create"}
+            <Button onClick={handleSave} disabled={isSaving}>
+              <Save size={14} /> {isSaving ? "Saving..." : editingLink ? "Update" : "Create"}
             </Button>
           </div>
         </div>

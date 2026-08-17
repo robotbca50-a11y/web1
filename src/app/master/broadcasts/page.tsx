@@ -17,6 +17,7 @@ export default function BroadcastsPage() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState({
     title: "",
     content: "",
@@ -51,6 +52,8 @@ export default function BroadcastsPage() {
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       if (editingId) {
         await fetch("/api/admin/broadcasts", {
@@ -66,9 +69,11 @@ export default function BroadcastsPage() {
         });
       }
       setIsModalOpen(false);
-      loadData();
+      await loadData();
     } catch (e) {
       console.warn("Failed to save broadcast:", e);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -190,7 +195,7 @@ export default function BroadcastsPage() {
           </div>
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)}><X size={14} /> Cancel</Button>
-            <Button onClick={handleSave}><Save size={14} /> {editingId ? "Update" : "Create"}</Button>
+            <Button onClick={handleSave} disabled={isSaving}><Save size={14} /> {isSaving ? "Saving..." : editingId ? "Update" : "Create"}</Button>
           </div>
         </div>
       </Modal>

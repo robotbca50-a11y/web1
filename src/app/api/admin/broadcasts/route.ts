@@ -19,9 +19,22 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error;
 
   const body = await request.json();
+
+  const { data: existing } = await auth.supabase
+    .from("broadcasts")
+    .select("id")
+    .eq("title", body.title)
+    .eq("content", body.content)
+    .gte("created_at", new Date(Date.now() - 60000).toISOString())
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return NextResponse.json({ data: existing[0], dedup: true });
+  }
+
   const { data, error } = await auth.supabase
     .from("broadcasts")
-    .insert(body)
+    .insert({ title: body.title, content: body.content, priority: body.priority || "normal", is_active: body.is_active !== false })
     .select()
     .single();
 

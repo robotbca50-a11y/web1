@@ -19,9 +19,22 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error;
 
   const body = await request.json();
+
+  const { data: existing } = await auth.supabase
+    .from("links")
+    .select("id")
+    .eq("title", body.title)
+    .eq("url", body.url)
+    .gte("created_at", new Date(Date.now() - 60000).toISOString())
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return NextResponse.json({ data: existing[0], dedup: true });
+  }
+
   const { data, error } = await auth.supabase
     .from("links")
-    .insert(body)
+    .insert({ title: body.title, url: body.url, description: body.description || "", category: body.category || "general", icon: body.icon || "", is_active: body.is_active !== false, order_index: body.order_index || 0 })
     .select()
     .single();
 
