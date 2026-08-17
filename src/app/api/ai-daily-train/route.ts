@@ -159,14 +159,15 @@ function detectCategory(question: string): string {
   return "general";
 }
 
-// Determine best available provider: Groq > Ollama > others
-type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama";
+// Determine best available provider: xAI > Groq > Ollama > others
+type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai";
 
 function getBestProvider(): AIProvider {
   const explicit = process.env.AI_PROVIDER as AIProvider | undefined;
-  if (explicit && explicit !== "groq") return explicit; // user explicitly chose something
-  if (process.env.AI_API_KEY) return "groq"; // has API key → use Groq
-  return "ollama"; // no API key → fall back to local Ollama
+  if (explicit) return explicit;
+  if (process.env.AI_API_KEY?.startsWith("xai-")) return "xai";
+  if (process.env.AI_API_KEY) return "groq";
+  return "ollama";
 }
 const SYSTEM_PROMPT = `Kamu adalah AI expert yang memberikan jawaban LENGKAP dan MENDALAM.
 Jawab dalam bahasa yang SAMA dengan pertanyaan (Indonesian/English).
@@ -182,6 +183,7 @@ async function callWithProvider(provider: AIProvider, apiKey: string, question: 
     groq: { baseUrl: "https://api.groq.com/openai/v1", model: "llama-3.1-8b-instant" },
     deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
     together: { baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3-8b-chat-hf" },
+    xai: { baseUrl: "https://api.x.ai/v1", model: "grok-3-mini" },
     ollama: { baseUrl: process.env.OLLAMA_URL || "http://localhost:11434", model: process.env.OLLAMA_MODEL || "llama3.2" },
   };
 
@@ -235,7 +237,7 @@ async function callExternalAI(question: string): Promise<string> {
   }
 
   // Fallback chain: try other providers
-  const fallbacks: AIProvider[] = (["groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary);
+  const fallbacks: AIProvider[] = (["xai", "groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary);
   for (const fb of fallbacks) {
     try {
       const key = fb === "ollama" ? "" : (process.env.AI_API_KEY || "");

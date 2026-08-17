@@ -5,7 +5,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 // Supported AI providers
-type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama";
+type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai";
 
 // Call AI with fallback chain
 async function callWithProvider(provider: AIProvider, apiKey: string, systemPrompt: string, question: string): Promise<string> {
@@ -14,6 +14,7 @@ async function callWithProvider(provider: AIProvider, apiKey: string, systemProm
     groq: { baseUrl: "https://api.groq.com/openai/v1", model: "llama-3.1-8b-instant" },
     deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
     together: { baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3-8b-chat-hf" },
+    xai: { baseUrl: "https://api.x.ai/v1", model: "grok-3-mini" },
     ollama: { baseUrl: process.env.OLLAMA_URL || "http://localhost:11434", model: process.env.OLLAMA_MODEL || "llama3.2" },
   };
   const cfg = configs[provider];
@@ -55,7 +56,7 @@ RULES:
 
 ${existingKnowledge ? `Existing knowledge base:\n${existingKnowledge}\n\nUse this if relevant, but always provide your OWN comprehensive knowledge.` : ""}`;
 
-  const primary = (process.env.AI_PROVIDER || "groq") as AIProvider;
+  const primary: AIProvider = process.env.AI_API_KEY?.startsWith("xai-") ? "xai" : (process.env.AI_PROVIDER as AIProvider) || "groq";
   const apiKey = process.env.AI_API_KEY || "";
 
   try {
@@ -64,7 +65,7 @@ ${existingKnowledge ? `Existing knowledge base:\n${existingKnowledge}\n\nUse thi
     console.log(`[AI] ${primary} failed: ${e instanceof Error ? e.message : e}`);
   }
 
-  const fallbacks: AIProvider[] = (["groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary);
+  const fallbacks: AIProvider[] = (["xai", "groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary);
   for (const fb of fallbacks) {
     try {
       const result = await callWithProvider(fb, fb === "ollama" ? "" : apiKey, systemPrompt, question);
