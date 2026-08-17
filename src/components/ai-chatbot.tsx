@@ -71,11 +71,11 @@ export function AIChatbot() {
 
       // Build context
       const knowledgeContext = knowledge
-        ?.map((k) => `[${k.category}] ${k.topic}: ${k.content}`)
+        ?.map((k: { category: string; topic: string; content: string }) => `[${k.category}] ${k.topic}: ${k.content}`)
         .join("\n") || "";
 
       const conversationHistory = recentConvos
-        ?.map((c) => `${c.role}: ${c.content}`)
+        ?.map((c: { role: string; content: string }) => `${c.role}: ${c.content}`)
         .join("\n") || "";
 
       // Simple AI response generation (without external API)

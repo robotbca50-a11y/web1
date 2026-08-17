@@ -33,13 +33,13 @@ export default function HubPage() {
     const fetchData = async () => {
       const supabase = createClient();
       const [linksRes, broadcastsRes] = await Promise.all([
-        supabase.from("links").select("*").eq("is_active", true).order("order_index"),
-        supabase.from("broadcasts").select("*").eq("is_active", true).order("created_at", { ascending: false }).limit(3),
+        supabase.from("links").select("*").eq("is_active", true).order("order_index") as unknown as { data: LinkType[] | null },
+        supabase.from("broadcasts").select("*").eq("is_active", true).order("created_at", { ascending: false }).limit(3) as unknown as { data: Broadcast[] | null },
       ]);
 
       if (linksRes.data) {
         setLinks(linksRes.data);
-        const cats = [...new Set(linksRes.data.map((l: LinkType) => l.category))];
+        const cats: string[] = [...new Set(linksRes.data.map((l: LinkType) => l.category))];
         setCategories(cats);
       }
       if (broadcastsRes.data) setBroadcasts(broadcastsRes.data);
