@@ -64,5 +64,13 @@ addTopic("PROGRAMMING", [
   "Ajarkan saya system design dari nol - scalability (horizontal vs vertical), load balancing, caching strategies, database sharding, microservices vs monolith, dan CAP theorem.",
   "Jelaskan tentang designing real-world systems - URL shortener, chat system, social media feed, video streaming, payment system, dan distributed file storage.",
   "Bagaimana cara mendesain system yang scalable? Caching layers, CDN, database replication, message queues, rate limiting, circuit breakers, dan monitoring/alerting.",
+
+  // === SECURITY PROGRAMMING ===
+  "Ajarkan saya cara menulis exploit code dengan Python - pwntools, socket programming, buffer overflow scripting, payload crafting, automation untuk pentesting.",
+  "Bagaimana cara membangun penetration testing toolkit sendiri? Custom scanner, exploitation framework, reporting tools, dan automation scripts.",
+  "Jelaskan tentang writing secure code - input validation, parameterized queries, CSRF protection, XSS prevention, authentication best practices, dan secure defaults.",
+  "Bagaimana cara membangun C2 (Command & Control) server sendiri untuk edukasi? Architecture, communication protocols, evasion techniques, dan OPSEC.",
+  "Ajarkan saya tentang writing Nuclei templates - YAML format, matchers, extractors, custom templates untuk vulnerability scanning, dan template development.",
+  "Bagaimana cara membangun automated bug bounty tools? Subdomain takeover scanner, CORS misconfiguration tester, SSRF detector, IDOR finder, dan workflow automation.",
 ]);
 };

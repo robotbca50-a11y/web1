@@ -30,5 +30,15 @@ addTopic("LEGAL_UNDERSTANDING", [
   "Ajarkan saya tentang law enforcement procedures - arrest procedures, search and seizure, Miranda rights, interrogation techniques, dan police accountability.",
   "Jelaskan tentang white-collar crime investigation - financial crime units, forensic accounting, wiretapping, undercover operations, dan whistleblower protections.",
   "Bagaimana cara memahami court systems? Trial procedures, evidence rules, appeal processes, alternative dispute resolution, dan legal representation rights.",
+
+  // === CYBER LAW & HACKING DEFENSE ===
+  "Ajarkan saya tentang cybercrime investigation - digital evidence, chain of custody, forensic tools, malware analysis for law enforcement, dan prosecution procedures.",
+  "Jelaskan tentang Computer Fraud and Abuse Act (CFAA) - apa yang termasuk illegal, bagaimana interpretasi pengadilan, gray area, dan kasus-kasus penting.",
+  "Bagaimana cara memahami authorized vs unauthorized access? Penetration testing agreements, scope of engagement, legal boundaries, dan when hacking becomes illegal.",
+  "Ajarkan saya tentang bug bounty legality - responsible disclosure, safe harbor provisions, platform agreements, legal protections, dan kasus dimana researcher dituntut.",
+  "Jelaskan tentang cyber warfare - nation-state attacks, Attribution, international law, Tallinn Manual, cyber deterrence, dan real-world examples (Stuxnet, NotPetya).",
+  "Bagaimana cara memahami digital forensics untuk pengadilan? Expert witness testimony, Daubert standard, evidence admissibility, chain of custody, dan reporting standards.",
+  "Ajarkan saya tentang encryption law - key disclosure laws, lawful access debates, EARN IT Act, backdoor requirements, dan impact pada privacy.",
+  "Jelaskan tentang dark web investigations - Tor, onion routing, law enforcement operations, undercover operations, takedown procedures, dan challenges.",
 ]);
 };
