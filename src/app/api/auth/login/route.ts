@@ -1,69 +1,84 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
 export async function POST(request: Request) {
-  if (!supabaseUrl || !supabaseKey) {
-    return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !serviceKey || !anonKey) {
+    return NextResponse.json({ 
+      error: "Env vars belum lengkap",
+      debug: { url: !!supabaseUrl, service: !!serviceKey, anon: !!anonKey }
+    }, { status: 500 });
   }
 
   try {
     const { username, password } = await request.json();
 
     if (!username || !password) {
-      return NextResponse.json({ error: "Username dan password wajib diisi" }, { status: 400 });
+      return NextResponse.json({ error: "Username dan password wajib" }, { status: 400 });
     }
 
-    // Find user by username in profiles table
-    const adminSupabase = createClient(supabaseUrl, supabaseKey);
+    // Client with service role (bypass RLS)
+    const admin = createClient(supabaseUrl, serviceKey);
 
-    const { data: profile, error: profileError } = await adminSupabase
+    // 1. Cari profile berdasarkan username
+    const { data: profile, error: pErr } = await admin
       .from("profiles")
       .select("id, username")
       .eq("username", username)
       .single();
 
-    if (profileError || !profile) {
-      return NextResponse.json({ error: "Username tidak ditemukan" }, { status: 401 });
+    if (pErr || !profile) {
+      return NextResponse.json({ 
+        error: "Username tidak ditemukan",
+        debug: pErr?.message 
+      }, { status: 401 });
     }
 
-    // Check if user is admin
-    const { data: admin } = await adminSupabase
+    // 2. Cek apakah admin
+    const { data: adm } = await admin
       .from("admin_users")
       .select("role")
       .eq("id", profile.id)
       .single();
 
-    if (!admin) {
-      return NextResponse.json({ error: "Akun ini bukan admin" }, { status: 403 });
+    if (!adm) {
+      return NextResponse.json({ error: "Bukan admin" }, { status: 403 });
     }
 
-    // Get the user's email from auth.users
-    const { data: authUser } = await adminSupabase.auth.admin.getUserById(profile.id);
+    // 3. Ambil email dari auth.users
+    const { data: authUser, error: aErr } = await admin.auth.admin.getUserById(profile.id);
 
-    if (!authUser?.user?.email) {
-      return NextResponse.json({ error: "User tidak ditemukan" }, { status: 401 });
+    if (aErr || !authUser?.user?.email) {
+      return NextResponse.json({ 
+        error: "Auth user tidak ditemukan",
+        debug: aErr?.message 
+      }, { status: 401 });
     }
 
-    // Sign in with email+password using the public anon key
-    const supabaseAnon = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-
-    const { data: signInData, error: signInError } = await supabaseAnon.auth.signInWithPassword({
+    // 4. Login pakai anon key
+    const pub = createClient(supabaseUrl, anonKey);
+    const { data: signIn, error: sErr } = await pub.auth.signInWithPassword({
       email: authUser.user.email,
       password: password,
     });
 
-    if (signInError) {
-      return NextResponse.json({ error: "Password salah" }, { status: 401 });
+    if (sErr) {
+      return NextResponse.json({ 
+        error: "Password salah",
+        debug: sErr.message 
+      }, { status: 401 });
     }
 
     return NextResponse.json({
-      user: signInData.user,
-      session: signInData.session,
+      user: signIn.user,
+      session: signIn.session,
     });
-  } catch (e) {
-    return NextResponse.json({ error: "Terjadi kesalahan" }, { status: 500 });
+
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
