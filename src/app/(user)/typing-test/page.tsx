@@ -14,67 +14,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { generateRoomCode, calculateWPM, calculateAccuracy } from "@/lib/utils";
+import { getWordList, type Language } from "@/lib/typing-words";
 import type { TypingResult } from "@/lib/types";
-
-// Word lists
-const WORDS_EASY = [
-  "the", "be", "to", "of", "and", "a", "in", "that", "have", "it",
-  "for", "not", "on", "with", "he", "as", "you", "do", "at", "this",
-  "but", "his", "by", "from", "they", "we", "say", "her", "she", "or",
-  "an", "will", "my", "one", "all", "would", "there", "their", "what",
-  "so", "up", "out", "if", "about", "who", "get", "which", "go", "me",
-  "when", "make", "can", "like", "time", "no", "just", "him", "know",
-  "take", "people", "into", "year", "your", "good", "some", "could",
-  "them", "see", "other", "than", "then", "now", "look", "only",
-  "come", "its", "over", "think", "also", "back", "after", "use",
-  "two", "how", "our", "work", "first", "well", "way", "even", "new",
-  "want", "because", "any", "these", "give", "day", "most", "us",
-];
-
-const WORDS_MEDIUM = [
-  "about", "above", "accept", "after", "again", "angle", "angry", "apart",
-  "apple", "apply", "arena", "argue", "arise", "avoid", "awake", "basic",
-  "beach", "began", "below", "bench", "birth", "black", "blade", "blame",
-  "blank", "blast", "bless", "blind", "block", "blood", "blown", "board",
-  "bonus", "boost", "bound", "brain", "brand", "brave", "bread", "break",
-  "breed", "brief", "bring", "broad", "brush", "build", "bunch", "burst",
-  "buyer", "cabin", "cable", "candy", "carry", "catch", "cause", "chain",
-  "chair", "chalk", "charm", "chase", "cheap", "check", "cheek", "chess",
-  "chief", "child", "civil", "claim", "clash", "class", "clean", "clear",
-  "climb", "cling", "clock", "close", "cloud", "coach", "coast", "could",
-  "count", "court", "cover", "crack", "craft", "crane", "crash", "crazy",
-  "cream", "cross", "crowd", "crown", "cruel", "crush", "curve", "cycle",
-  "daily", "dance", "death", "debut", "delay", "depth", "devil", "diary",
-  "dirty", "doubt", "dozen", "draft", "drain", "drama", "drank", "drawn",
-  "dream", "dress", "drink", "drive", "drown", "eager", "early", "earth",
-  "eight", "elite", "empty", "enemy", "enjoy", "enter", "entry", "equal",
-  "error", "event", "every", "exact", "exist", "extra", "faint", "faith",
-  "fancy", "fault", "feast", "fence", "ferry", "fetch", "fever", "fewer",
-  "fiber", "field", "fifth", "fifty", "fight", "final", "flame", "flash",
-  "flesh", "float", "flood", "floor", "flour", "fluid", "focus", "force",
-  "forge", "forth", "forum", "found", "frame", "frank", "fraud", "fresh",
-];
-
-const WORDS_HARD = [
-  "algorithm", "architecture", "asynchronous", "authentication", "blockchain",
-  "boolean", "callback", "compiler", "concatenate", "configuration",
-  "constructor", "polymorphism", "encapsulation", "abstraction", "inheritance",
-  "microservice", "middleware", "mutex", "namespace", "optimization",
-  "refactoring", "repository", "serialization", "throughput", "typescript",
-  "virtualization", "dependency", "deployment", "encryption", "exception",
-  "framework", "function", " garbage", " garbage", "generator",
-  "immutable", "implementation", "interface", "iteration", "javascript",
-  "kubernetes", "lambda", "lifecycle", "middleware", "multithreading",
-  "negotiation", "notification", "obfuscation", "overloading", "parameter",
-  "persistent", "polymorphic", "prerequisite", "promise", "prototyping",
-  "query", "recursion", "redundancy", "regex", "responsive",
-  "synchronization", "terminal", "transaction", "transform", "typescript",
-  "undefined", "validation", "variable", "versioning", "virtual",
-  "webpack", "workspace", "wrapper", "yield", "zipper",
-  "abstract", "assertion", "associative", "asymmetric", "buffer",
-  "caching", "cascading", "clustering", "concurrency", "daemon",
-  "debugging", "decryption", "deserialization", "diagnostic", "dispatch",
-];
 
 interface WordState {
   word: string;
@@ -82,16 +23,11 @@ interface WordState {
   status: "pending" | "current" | "correct" | "incorrect";
 }
 
-function generateText(difficulty: string, wordCount: number = 50): string {
-  let wordList: string[];
-  switch (difficulty) {
-    case "easy": wordList = WORDS_EASY; break;
-    case "hard": wordList = WORDS_HARD; break;
-    default: wordList = WORDS_MEDIUM;
-  }
+function generateText(difficulty: string, language: Language, wordCount: number = 50): string {
+  const wordList = getWordList(difficulty, language);
   const words: string[] = [];
   for (let i = 0; i < wordCount; i++) {
-    words.push(wordList[Math.floor(Math.random() * wordList.length)].trim());
+    words.push(wordList[Math.floor(Math.random() * wordList.length)]);
   }
   return words.join(" ");
 }
@@ -100,6 +36,7 @@ export default function TypingTestPage() {
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [timeLimit, setTimeLimit] = useState(60);
   const [mode, setMode] = useState<"solo" | "friend">("solo");
+  const [language, setLanguage] = useState<Language>("en");
 
   // Test state
   const [text, setText] = useState("");
@@ -145,7 +82,7 @@ export default function TypingTestPage() {
 
   // Initialize text
   useEffect(() => {
-    const newText = generateText(difficulty);
+    const newText = generateText(difficulty, language);
     setText(newText);
     const wordList: WordState[] = newText.split(" ").map((w) => ({
       word: w,
@@ -156,7 +93,7 @@ export default function TypingTestPage() {
     setWords(wordList);
     setCurrentWordIdx(0);
     setCurrentCharIdx(0);
-  }, [difficulty]);
+  }, [difficulty, language]);
 
   // Timer
   useEffect(() => {
@@ -189,7 +126,7 @@ export default function TypingTestPage() {
   }, [correctChars, isActive, startTime]);
 
   const startTest = () => {
-    const newText = generateText(difficulty);
+    const newText = generateText(difficulty, language);
     setText(newText);
     const wordList: WordState[] = newText.split(" ").map((w) => ({
       word: w,
@@ -398,7 +335,7 @@ export default function TypingTestPage() {
             className="overflow-hidden mb-6"
           >
             <Card variant="glass" className="p-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {/* Difficulty */}
                 <div>
                   <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}>
@@ -469,6 +406,32 @@ export default function TypingTestPage() {
                     >
                       <Users size={12} /> Friend
                     </button>
+                  </div>
+                </div>
+
+                {/* Language */}
+                <div>
+                  <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}>
+                    🌐 Language
+                  </label>
+                  <div className="flex gap-1">
+                    {([
+                      { key: "en" as Language, label: "EN", full: "English" },
+                      { key: "id" as Language, label: "ID", full: "Indonesia" },
+                    ]).map((lang) => (
+                      <button
+                        key={lang.key}
+                        onClick={() => setLanguage(lang.key)}
+                        className="flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all"
+                        style={{
+                          background: language === lang.key ? theme.colors.primary : theme.colors.surface,
+                          color: language === lang.key ? theme.colors.background : theme.colors.textMuted,
+                        }}
+                        title={lang.full}
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
