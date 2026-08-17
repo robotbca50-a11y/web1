@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
-import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Link as LinkType, Broadcast } from "@/lib/types";
@@ -31,18 +30,18 @@ export default function HubPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const supabase = createClient();
-      const [linksRes, broadcastsRes] = await Promise.all([
-        supabase.from("links").select("*").eq("is_active", true).order("order_index") as unknown as { data: LinkType[] | null },
-        supabase.from("broadcasts").select("*").eq("is_active", true).order("created_at", { ascending: false }).limit(3) as unknown as { data: Broadcast[] | null },
-      ]);
-
-      if (linksRes.data) {
-        setLinks(linksRes.data);
-        const cats: string[] = [...new Set(linksRes.data.map((l: LinkType) => l.category))];
-        setCategories(cats);
+      try {
+        const res = await fetch("/api/public/content");
+        if (!res.ok) return;
+        const data: { links?: LinkType[]; broadcasts?: Broadcast[] } = await res.json();
+        if (data.links) {
+          setLinks(data.links);
+          setCategories([...new Set(data.links.map((l) => l.category))]);
+        }
+        if (data.broadcasts) setBroadcasts(data.broadcasts);
+      } catch (e) {
+        console.warn("Failed to fetch content:", e);
       }
-      if (broadcastsRes.data) setBroadcasts(broadcastsRes.data);
     };
     fetchData();
   }, []);

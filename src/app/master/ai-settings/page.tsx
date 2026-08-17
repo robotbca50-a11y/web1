@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { Brain, Plus, Trash2, Edit3, Save, X, Search } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
-import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -21,9 +20,13 @@ export default function AISettingsPage() {
   const theme = getTheme(currentTheme);
 
   const loadData = async () => {
-    const supabase = createClient();
-    const { data } = await supabase.from("ai_knowledge").select("*").order("category");
-    if (data) setKnowledge(data);
+    try {
+      const res = await fetch("/api/admin/ai-knowledge");
+      const json = await res.json();
+      if (json.data) setKnowledge(json.data);
+    } catch (e) {
+      console.warn("Failed to load knowledge:", e);
+    }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -41,21 +44,39 @@ export default function AISettingsPage() {
   };
 
   const handleSave = async () => {
-    const supabase = createClient();
-    if (editingId) {
-      await supabase.from("ai_knowledge").update(form).eq("id", editingId);
-    } else {
-      await supabase.from("ai_knowledge").insert(form);
+    try {
+      if (editingId) {
+        await fetch("/api/admin/ai-knowledge", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingId, ...form }),
+        });
+      } else {
+        await fetch("/api/admin/ai-knowledge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+      }
+      setIsModalOpen(false);
+      loadData();
+    } catch (e) {
+      console.warn("Failed to save knowledge:", e);
     }
-    setIsModalOpen(false);
-    loadData();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Hapus knowledge ini?")) return;
-    const supabase = createClient();
-    await supabase.from("ai_knowledge").delete().eq("id", id);
-    loadData();
+    try {
+      await fetch("/api/admin/ai-knowledge", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      loadData();
+    } catch (e) {
+      console.warn("Failed to delete knowledge:", e);
+    }
   };
 
   const filtered = knowledge.filter(

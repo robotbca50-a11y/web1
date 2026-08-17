@@ -54,29 +54,20 @@ export function AIChatbot() {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      
-      // Get knowledge base
-      const { data: knowledge } = await supabase
-        .from("ai_knowledge")
-        .select("topic, content, category");
-
-      // Get recent conversations for context
-      const { data: recentConvos } = await supabase
-        .from("ai_conversations")
-        .select("role, content")
-        .eq("session_id", sessionId)
-        .order("created_at", { ascending: true })
-        .limit(10);
+      // Get knowledge base from public API (bypasses RLS)
+      const knowledgeRes = await fetch("/api/public/ai-knowledge");
+      const knowledgeJson = await knowledgeRes.json();
+      const knowledge = knowledgeJson.data || [];
 
       // Build context
       const knowledgeContext = knowledge
         ?.map((k: { category: string; topic: string; content: string }) => `[${k.category}] ${k.topic}: ${k.content}`)
         .join("\n") || "";
 
-      const conversationHistory = recentConvos
-        ?.map((c: { role: string; content: string }) => `${c.role}: ${c.content}`)
-        .join("\n") || "";
+      // Build conversation history from local state
+      const conversationHistory = messages
+        .map((m) => `${m.role}: ${m.content}`)
+        .join("\n");
 
       // Simple AI response generation (without external API)
       const response = generateResponse(
@@ -93,19 +84,24 @@ export function AIChatbot() {
 
       setMessages((prev) => [...prev, assistantMsg]);
 
-      // Save conversation
-      await supabase.from("ai_conversations").insert([
-        {
-          session_id: sessionId,
-          role: "user",
-          content: userMsg.content,
-        },
-        {
-          session_id: sessionId,
-          role: "assistant",
-          content: response,
-        },
-      ]);
+      // Save conversation (best effort, may fail if RLS blocks)
+      try {
+        const supabase = createClient();
+        await supabase.from("ai_conversations").insert([
+          {
+            session_id: sessionId,
+            role: "user",
+            content: userMsg.content,
+          },
+          {
+            session_id: sessionId,
+            role: "assistant",
+            content: response,
+          },
+        ]);
+      } catch {
+        // Conversation save is optional, don't break chat
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -125,11 +121,16 @@ export function AIChatbot() {
       prev.map((m) => (m.id === msgId ? { ...m, feedback } : m))
     );
 
-    const supabase = createClient();
-    await supabase
-      .from("ai_conversations")
-      .update({ feedback })
-      .eq("session_id", sessionId);
+    // Save feedback best effort
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("ai_conversations")
+        .update({ feedback })
+        .eq("session_id", sessionId);
+    } catch {
+      // Ignore
+    }
   };
 
   return (

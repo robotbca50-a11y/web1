@@ -25,14 +25,15 @@ export default function BroadcastPage() {
 
   useEffect(() => {
     const fetchBroadcasts = async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("broadcasts")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false });
-
-      if (data) setBroadcasts(data);
+      try {
+        const res = await fetch("/api/public/content");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.broadcasts) setBroadcasts(data.broadcasts);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch broadcasts:", e);
+      }
       setLoading(false);
     };
     fetchBroadcasts();

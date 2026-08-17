@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
-import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -31,9 +30,13 @@ export default function LinksPage() {
   const theme = getTheme(currentTheme);
 
   const loadLinks = async () => {
-    const supabase = createClient();
-    const { data } = await supabase.from("links").select("*").order("order_index");
-    if (data) setLinks(data);
+    try {
+      const res = await fetch("/api/admin/links");
+      const json = await res.json();
+      if (json.data) setLinks(json.data);
+    } catch (e) {
+      console.warn("Failed to load links:", e);
+    }
   };
 
   useEffect(() => { loadLinks(); }, []);
@@ -59,27 +62,52 @@ export default function LinksPage() {
   };
 
   const handleSave = async () => {
-    const supabase = createClient();
-    if (editingLink?.id) {
-      await supabase.from("links").update(form).eq("id", editingLink.id);
-    } else {
-      await supabase.from("links").insert(form);
+    try {
+      if (editingLink?.id) {
+        await fetch("/api/admin/links", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingLink.id, ...form }),
+        });
+      } else {
+        await fetch("/api/admin/links", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+      }
+      setIsModalOpen(false);
+      loadLinks();
+    } catch (e) {
+      console.warn("Failed to save link:", e);
     }
-    setIsModalOpen(false);
-    loadLinks();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Hapus link ini?")) return;
-    const supabase = createClient();
-    await supabase.from("links").delete().eq("id", id);
-    loadLinks();
+    try {
+      await fetch("/api/admin/links", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      loadLinks();
+    } catch (e) {
+      console.warn("Failed to delete link:", e);
+    }
   };
 
   const toggleActive = async (id: string, current: boolean) => {
-    const supabase = createClient();
-    await supabase.from("links").update({ is_active: !current }).eq("id", id);
-    loadLinks();
+    try {
+      await fetch("/api/admin/links", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, is_active: !current }),
+      });
+      loadLinks();
+    } catch (e) {
+      console.warn("Failed to toggle link:", e);
+    }
   };
 
   return (

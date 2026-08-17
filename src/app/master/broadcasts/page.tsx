@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
-import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -28,9 +27,13 @@ export default function BroadcastsPage() {
   const theme = getTheme(currentTheme);
 
   const loadData = async () => {
-    const supabase = createClient();
-    const { data } = await supabase.from("broadcasts").select("*").order("created_at", { ascending: false });
-    if (data) setBroadcasts(data);
+    try {
+      const res = await fetch("/api/admin/broadcasts");
+      const json = await res.json();
+      if (json.data) setBroadcasts(json.data);
+    } catch (e) {
+      console.warn("Failed to load broadcasts:", e);
+    }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -48,21 +51,39 @@ export default function BroadcastsPage() {
   };
 
   const handleSave = async () => {
-    const supabase = createClient();
-    if (editingId) {
-      await supabase.from("broadcasts").update(form).eq("id", editingId);
-    } else {
-      await supabase.from("broadcasts").insert(form);
+    try {
+      if (editingId) {
+        await fetch("/api/admin/broadcasts", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingId, ...form }),
+        });
+      } else {
+        await fetch("/api/admin/broadcasts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+      }
+      setIsModalOpen(false);
+      loadData();
+    } catch (e) {
+      console.warn("Failed to save broadcast:", e);
     }
-    setIsModalOpen(false);
-    loadData();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Hapus broadcast ini?")) return;
-    const supabase = createClient();
-    await supabase.from("broadcasts").delete().eq("id", id);
-    loadData();
+    try {
+      await fetch("/api/admin/broadcasts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      loadData();
+    } catch (e) {
+      console.warn("Failed to delete broadcast:", e);
+    }
   };
 
   return (
