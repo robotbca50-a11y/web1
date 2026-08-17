@@ -352,10 +352,35 @@ const CODING_KEYWORDS = new Set([
   "import", "export", "module", "package", "npm"
 ]);
 
+const SCIENCE_KEYWORDS = new Set([
+  "sains", "science", "fisika", "physics", "kimia", "chemistry", "biologi", "biology",
+  "astronomi", "astronomy", "geologi", "geology", "bintang", "planet", "galaxy",
+  "sel", "cell", "dna", "evolusi", "evolution", "energi", "energy", "gaya", "force",
+  "listrik", "electric", "cahaya", "light", "suara", "sound", "radiasi", "radiation",
+  "nuklir", "nuclear", "organisme", "hewan", "hewan", "tumbuhan", "ekosistem",
+  "reaksi", "reaction", "atom", "molekul", "asam", "bas", "ph",
+  "newton", "einstein", "gravitasi", "gravity", "magnet", "magnetism"
+]);
+
 const WRITING_KEYWORDS = new Set([
   "menulis", "tulis", "writing", "email", "cv", "resume",
   "laporan", "surat", "artikel", "blog", "copywriting",
   "proposal", "essay", "persuasi", "penulisan"
+]);
+
+const GENERAL_KEYWORDS = new Set([
+  "keuangan", "finance", "investasi", "investing", "budget", "anggaran",
+  "pajak", "tax", "saham", "stock", "crypto", "bitcoin",
+  "kesehatan", "health", "diet", "olahraga", "exercise", "tidur", "sleep",
+  "stres", "stress", "meditasi", "meditation",
+  "produktivitas", "productivity", "pomodoro", "manajemen waktu",
+  "sejarah", "history", "geografi", "geography", "negara", "country",
+  "teknologi", "technology", "ai", "artificial intelligence", "blockchain",
+  "5g", "cloud", "cybersecurity",
+  "memasak", "cooking", "resep", "recipe",
+  "perjalanan", "travel", "tips", "saran", "advice",
+  "negosiasi", "negotiation", "komunikasi", "communication",
+  "belajar", "study", "belajar", "motivasi", "motivation"
 ]);
 
 const WEB_KEYWORDS = new Set([
@@ -401,7 +426,9 @@ function generateResponse(
       + "- Google Sheets: QUERY, FILTER, SORT, UNIQUE, SPARKLINE\n\n"
       + "**Matematika** (aljabar, statistik, trigonometri, kalkulus)\n\n"
       + "**Coding** (Python, JavaScript, TypeScript, SQL, Git, React, Node.js, Regex, Bash)\n\n"
+      + "**Sains** (fisika, kimia, biologi, astronomi)\n\n"
       + "**Menulis** (email profesional, CV, laporan, essay, copywriting)\n\n"
+      + "**Pengetahuan Umum** (keuangan, kesehatan, sejarah, teknologi)\n\n"
       + "Tanya langsung, contoh: *\"rumus VLOOKUP\"* atau *\"buatkan function Python\"*");
   }
 
@@ -422,9 +449,15 @@ function generateResponse(
       + "**Coding:**\n"
       + "- Python, JavaScript, SQL, Git, React, dll\n"
       + "- Contoh: *\"Buatkan function sorting di Python\"*\n\n"
+      + "**Sains:**\n"
+      + "- Fisika, kimia, biologi, astronomi\n"
+      + "- Contoh: *\"Jelaskan hukum Newton\"*\n\n"
       + "**Menulis:**\n"
-      + "- Email, CV, laporan, copywriting\n"
+      + "- Email, CV, laporan, essay, copywriting\n"
       + "- Contoh: *\"Tulis email profesional untuk client\"*\n\n"
+      + "**Pengetahuan Umum:**\n"
+      + "- Keuangan, kesehatan, sejarah, teknologi\n"
+      + "- Contoh: *\"Apa itu compound interest?\"*\n\n"
       + "**Tips:** Tanya se-spesifik mungkin untuk jawaban terbaik!");
   }
 
@@ -433,12 +466,14 @@ function generateResponse(
     return formatResponse("**Web Utama AI** - AI Assistant & Knowledge Base\n\n"
       + "Saya AI yang berjalan 100% di browser tanpa API eksternal.\n\n"
       + "**Kepintaran saya:**\n"
+      + "- 535+ knowledge entries\n"
       + "- 80+ rumus Excel & Google Sheets (lengkap dengan contoh)\n"
       + "- Matematika: aljabar, statistik, trigonometri, kalkulus, matriks\n"
       + "- Coding: Python, JS, TS, SQL, Git, React, Node.js, Regex, Bash\n"
+      + "- Sains: fisika, kimia, biologi, astronomi, geologi\n"
       + "- Menulis: email, CV, laporan, essay, copywriting\n"
-      + "- Pengetahuan umum: keuangan, produktivitas\n\n"
-      + "Knowledge base saya di-update secara berkola oleh admin.");
+      + "- Pengetahuan umum: keuangan, kesehatan, sejarah, teknologi\n\n"
+      + "Fuzzy search: bisa menangani typo! Coba ketik apa saja.");
   }
 
   // ===== WEB UTAMA FEATURES =====
@@ -466,22 +501,38 @@ function generateResponse(
     return handleWritingResponse(q, intent, specificTopic, knowledgeBase, words);
   }
 
+  // ===== SCIENCE =====
+  if (category === "science") {
+    return handleScienceResponse(q, intent, specificTopic, knowledgeBase);
+  }
+
+  // ===== GENERAL (finance, health, history, tech, daily) =====
+  if (category === "general") {
+    return handleGeneralResponse(q, intent, specificTopic, knowledgeBase);
+  }
+
   // ===== CALCULATION: Try to solve math problems =====
   if (intent === "calculation" || INTENT_PATTERNS.calculation.test(q)) {
     const mathResult = tryCalculate(q);
     if (mathResult) return mathResult;
   }
 
-  // ===== SMART KNOWLEDGE BASE SEARCH =====
-  const smartMatch = searchKnowledge(q, knowledgeBase, []);
+  // ===== SMART KNOWLEDGE BASE SEARCH (detected category) =====
+  const smartMatch = searchKnowledge(q, knowledgeBase, category !== "unknown" ? [category] : []);
   if (smartMatch) return formatResponse(smartMatch);
+
+  // ===== SEARCH ALL CATEGORIES AS FALLBACK =====
+  const allMatch = searchKnowledge(q, knowledgeBase, []);
+  if (allMatch) return formatResponse(allMatch);
 
   // ===== FALLBACK =====
   return formatResponse("Pertanyaan menarik! Saya bisa membantu tentang:\n\n"
     + "- **Excel/Google Sheets**: 80+ rumus\n"
     + "- **Matematika**: aljabar, statistik, trigonometri, kalkulus\n"
     + "- **Coding**: Python, JS, SQL, Git, React, Node.js\n"
-    + "- **Menulis**: email, CV, laporan, essay\n\n"
+    + "- **Sains**: fisika, kimia, biologi, astronomi\n"
+    + "- **Menulis**: email, CV, laporan, essay\n"
+    + "- **Pengetahuan Umum**: keuangan, kesehatan, sejarah, teknologi\n\n"
     + "Coba tanyakan lebih spesifik, atau ketik *\"help\"* untuk daftar lengkap!");
 }
 
@@ -507,9 +558,11 @@ function detectCategory(q: string): string {
   }
   if (MATH_KEYWORDS.has(q) || Array.from(MATH_KEYWORDS).some(kw => q.includes(kw))) return "math";
   if (CODING_KEYWORDS.has(q) || Array.from(CODING_KEYWORDS).some(kw => q.includes(kw))) return "coding";
+  if (SCIENCE_KEYWORDS.has(q) || Array.from(SCIENCE_KEYWORDS).some(kw => q.includes(kw))) return "science";
   if (WRITING_KEYWORDS.has(q) || Array.from(WRITING_KEYWORDS).some(kw => q.includes(kw))) return "writing";
   if (WEB_KEYWORDS.has(q) || Array.from(WEB_KEYWORDS).some(kw => q.includes(kw))) return "web";
-  return "general";
+  if (GENERAL_KEYWORDS.has(q) || Array.from(GENERAL_KEYWORDS).some(kw => q.includes(kw))) return "general";
+  return "unknown";
 }
 
 function extractSpecificTopic(q: string): string {
@@ -1115,6 +1168,56 @@ function handleWritingResponse(q: string, _intent: string, specificTopic: string
 }
 
 // ============================================================
+// HANDLER: SCIENCE
+// ============================================================
+function handleScienceResponse(q: string, _intent: string, specificTopic: string, knowledgeBase: string): string {
+  if (specificTopic) {
+    const kbMatch = getKnowledgeTopic(specificTopic, knowledgeBase);
+    if (kbMatch) return formatResponse(kbMatch);
+  }
+
+  const kbMatch = searchKnowledge(q, knowledgeBase, ["science"]);
+  if (kbMatch) return formatResponse(kbMatch);
+
+  // Fallback: search all knowledge
+  const allMatch = searchKnowledge(q, knowledgeBase, []);
+  if (allMatch) return formatResponse(allMatch);
+
+  return formatResponse("**Sains & IPA** - Topik yang tersedia:\n\n"
+    + "- **Fisika:** hukum Newton, energi, listrik, gelombang, termodinamika, optik\n"
+    + "- **Kimia:** reaksi, asam-basa, stoikiometri, ikatan kimia, organik\n"
+    + "- **Biologi:** sel, DNA, evolusi, ekosistem, anatomi tubuh manusia\n"
+    + "- **Astronomi:** tata surya, bintang, galaksi, kosmologi\n\n"
+    + "Contoh: *\"Jelaskan hukum Newton\"* atau *\"Apa itu fotosintesis?\"*");
+}
+
+// ============================================================
+// HANDLER: GENERAL (Finance, Health, History, Tech, Daily Life)
+// ============================================================
+function handleGeneralResponse(q: string, _intent: string, specificTopic: string, knowledgeBase: string): string {
+  if (specificTopic) {
+    const kbMatch = getKnowledgeTopic(specificTopic, knowledgeBase);
+    if (kbMatch) return formatResponse(kbMatch);
+  }
+
+  const kbMatch = searchKnowledge(q, knowledgeBase, ["general"]);
+  if (kbMatch) return formatResponse(kbMatch);
+
+  // Fallback: search all knowledge
+  const allMatch = searchKnowledge(q, knowledgeBase, []);
+  if (allMatch) return formatResponse(allMatch);
+
+  return formatResponse("**Pengetahuan Umum** - Topik:\n\n"
+    + "- **Keuangan:** budgeting, investasi, pajak, crypto, tabungan\n"
+    + "- **Kesehatan:** nutrisi, olahraga, tidur, stres, ergonomi\n"
+    + "- **Sejarah:** peradaban kuno, Renaissance, revolusi industri\n"
+    + "- **Geografi:** benua, negara, sungai, iklim, timezone\n"
+    + "- **Teknologi:** AI, blockchain, 5G, cybersecurity, UX\n"
+    + "- **Kehidupan Sehari-hari:** produktivitas, komunikasi, memasak\n\n"
+    + "Contoh: *\"Apa itu compound interest?\"* atau *\"Tips produktivitas\"*");
+}
+
+// ============================================================
 // HANDLER: WEB FEATURES
 // ============================================================
 function handleWebFeatures(q: string, _specificTopic: string): string {
@@ -1249,36 +1352,79 @@ function tryCalculate(q: string): string | null {
 }
 
 // ============================================================
-// KNOWLEDGE BASE SEARCH
+// LEVENSHTEIN DISTANCE (for fuzzy matching)
+// ============================================================
+function levenshtein(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = b[i - 1] === a[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function fuzzyMatch(word: string, target: string, threshold = 0.7): boolean {
+  if (target.includes(word) || word.includes(target)) return true;
+  const maxLen = Math.max(word.length, target.length);
+  if (maxLen === 0) return true;
+  const distance = levenshtein(word, target);
+  return (1 - distance / maxLen) >= threshold;
+}
+
+function tokenize(text: string): string[] {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(w => w.length > 2);
+}
+
+// ============================================================
+// KNOWLEDGE BASE SEARCH (with fuzzy matching)
 // ============================================================
 function searchKnowledge(question: string, knowledgeBase: string, categories: string[]): string | null {
   const q = question.toLowerCase();
   const entries = knowledgeBase.split("\n").filter(line => line.includes("]"));
+  const questionTokens = tokenize(q);
 
   let bestMatch = "";
   let bestScore = 0;
 
   for (const entry of entries) {
-    const match = entry.match(/\[(\w+)\]\s*(\w+):\s*(.+)/);
+    const match = entry.match(/\[(\w+)\]\s*(.+?):\s*(.+)/);
     if (!match) continue;
 
     const [, category, topic, content] = match;
     if (categories.length > 0 && !categories.includes(category)) continue;
 
-    // Score based on keyword overlap
     const topicWords = topic.toLowerCase().replace(/_/g, " ").split(" ");
     let score = 0;
-    for (const word of topicWords) {
-      if (q.includes(word) && word.length > 2) score += 2;
+
+    for (const tw of topicWords) {
+      if (tw.length < 2) continue;
+      if (q.includes(tw)) { score += 3; continue; }
+      for (const qt of questionTokens) {
+        if (fuzzyMatch(qt, tw, 0.7)) { score += 2; break; }
+      }
     }
 
     const contentLower = content.toLowerCase();
-    const questionWords = q.split(/\s+/).filter(w => w.length > 3);
-    for (const word of questionWords) {
-      if (contentLower.includes(word)) score += 1;
+    for (const qt of questionTokens) {
+      if (qt.length < 3) continue;
+      if (contentLower.includes(qt)) { score += 1; continue; }
+      const contentWords = contentLower.split(/\s+/);
+      for (const cw of contentWords) {
+        if (fuzzyMatch(qt, cw, 0.75)) { score += 1; break; }
+      }
     }
 
-    if (score > bestScore && score >= 3) {
+    if (score > bestScore && score >= 2) {
       bestScore = score;
       bestMatch = content;
     }
@@ -1290,7 +1436,18 @@ function searchKnowledge(question: string, knowledgeBase: string, categories: st
 function getKnowledgeTopic(topic: string, knowledgeBase: string): string | null {
   const regex = new RegExp(`\\[\\w+\\]\\s*${topic.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*(.+)`, "i");
   const match = knowledgeBase.match(regex);
-  return match ? match[1] : null;
+  if (match) return match[1];
+
+  const entries = knowledgeBase.split("\n").filter(line => line.includes("]"));
+  for (const entry of entries) {
+    const m = entry.match(/\[(\w+)\]\s*(.+?):\s*(.+)/);
+    if (!m) continue;
+    const [, , t, content] = m;
+    if (fuzzyMatch(topic.toLowerCase(), t.toLowerCase().replace(/_/g, " "), 0.6)) {
+      return content;
+    }
+  }
+  return null;
 }
 
 // ============================================================
