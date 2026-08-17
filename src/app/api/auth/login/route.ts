@@ -7,10 +7,7 @@ export async function POST(request: Request) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !serviceKey || !anonKey) {
-    return NextResponse.json({ 
-      error: "Env vars belum lengkap",
-      debug: { url: !!supabaseUrl, service: !!serviceKey, anon: !!anonKey }
-    }, { status: 500 });
+    return NextResponse.json({ error: "Env vars belum lengkap" }, { status: 500 });
   }
 
   try {
@@ -20,24 +17,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Username dan password wajib" }, { status: 400 });
     }
 
-    // Client with service role (bypass RLS)
     const admin = createClient(supabaseUrl, serviceKey);
 
-    // 1. Cari profile berdasarkan username
+    // Cari profile (termasuk email yang disimpan di profile)
     const { data: profile, error: pErr } = await admin
       .from("profiles")
-      .select("id, username")
+      .select("id, username, email")
       .eq("username", username)
       .single();
 
     if (pErr || !profile) {
-      return NextResponse.json({ 
-        error: "Username tidak ditemukan",
-        debug: pErr?.message 
-      }, { status: 401 });
+      return NextResponse.json({ error: "Username tidak ditemukan" }, { status: 401 });
     }
 
-    // 2. Cek apakah admin
+    if (!profile.email) {
+      return NextResponse.json({ error: "Email belum di-set di profile" }, { status: 500 });
+    }
+
+    // Cek admin
     const { data: adm } = await admin
       .from("admin_users")
       .select("role")
@@ -48,28 +45,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Bukan admin" }, { status: 403 });
     }
 
-    // 3. Ambil email dari auth.users
-    const { data: authUser, error: aErr } = await admin.auth.admin.getUserById(profile.id);
-
-    if (aErr || !authUser?.user?.email) {
-      return NextResponse.json({ 
-        error: "Auth user tidak ditemukan",
-        debug: aErr?.message 
-      }, { status: 401 });
-    }
-
-    // 4. Login pakai anon key
+    // Login pakai anon key
     const pub = createClient(supabaseUrl, anonKey);
     const { data: signIn, error: sErr } = await pub.auth.signInWithPassword({
-      email: authUser.user.email,
+      email: profile.email,
       password: password,
     });
 
     if (sErr) {
-      return NextResponse.json({ 
-        error: "Password salah",
-        debug: sErr.message 
-      }, { status: 401 });
+      return NextResponse.json({ error: "Password salah" }, { status: 401 });
     }
 
     return NextResponse.json({
