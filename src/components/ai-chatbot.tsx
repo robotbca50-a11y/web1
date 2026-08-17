@@ -34,7 +34,7 @@ export function AIChatbot() {
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: "Halo! Saya AI assistant Web Utama. Ada yang bisa saya bantu? Saya bisa menjawab pertanyaan tentang fitur web, memberikan tips, atau membantu menyelesaikan masalah.",
+          content: "Halo! Saya AI assistant Web Utama yang bisa belajar. Saya sudah tahu Excel, Matematika, Coding, Sains, dan Menulis. Tapi saya juga bisa belajar dari pertanyaan baru - tanya apa saja, dan saya akan mengingat jawabannya untuk pertanyaan berikutnya!",
         },
       ]);
     }
@@ -69,17 +69,44 @@ export function AIChatbot() {
         .map((m) => `${m.role}: ${m.content}`)
         .join("\n");
 
-      // Simple AI response generation (without external API)
-      const response = generateResponse(
+      // Smart AI response generation (without external API)
+      const localResponse = generateResponse(
         userMsg.content,
         knowledgeContext,
         conversationHistory
       );
 
+      // Check if local response is a template/fallback (not a real answer)
+      const isTemplate = isTemplateResponse(localResponse);
+
+      let finalAnswer: string;
+      let responseSource: string;
+
+      if (isTemplate) {
+        // Local knowledge doesn't know - call external AI to learn!
+        try {
+          const learnRes = await fetch("/api/ai-learn", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question: userMsg.content }),
+          });
+          const learnData = await learnRes.json();
+          finalAnswer = learnData.answer || localResponse;
+          responseSource = learnData.source || "ai_api";
+        } catch {
+          // If AI API fails, use local template but make it more helpful
+          finalAnswer = localResponse;
+          responseSource = "local_fallback";
+        }
+      } else {
+        finalAnswer = localResponse;
+        responseSource = "local_knowledge";
+      }
+
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: response,
+        content: finalAnswer,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -96,7 +123,7 @@ export function AIChatbot() {
           {
             session_id: sessionId,
             role: "assistant",
-            content: response,
+            content: finalAnswer,
           },
         ]);
       } catch {
@@ -249,10 +276,13 @@ export function AIChatbot() {
                     <Bot size={14} style={{ color: theme.colors.primary }} />
                   </div>
                   <div
-                    className="px-3 py-2 rounded-2xl rounded-bl-md"
-                    style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}
+                    className="px-3 py-2 rounded-2xl rounded-bl-md text-xs"
+                    style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}`, color: theme.colors.textMuted }}
                   >
-                    <Loader2 size={16} className="animate-spin" style={{ color: theme.colors.primary }} />
+                    <div className="flex items-center gap-2">
+                      <Loader2 size={12} className="animate-spin" style={{ color: theme.colors.primary }} />
+                      <span>Thinking...</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1455,4 +1485,28 @@ function getKnowledgeTopic(topic: string, knowledgeBase: string): string | null 
 // ============================================================
 function formatResponse(text: string): string {
   return text;
+}
+
+// ============================================================
+// DETECT TEMPLATE/FALLBACK RESPONSES
+// Template responses = generic messages that don't actually answer the question
+// ============================================================
+function isTemplateResponse(response: string): boolean {
+  const templatePatterns = [
+    /Pertanyaan menarik/,
+    /Saya bisa membantu tentang:/,
+    /Coba tanyakan lebih spesifik/,
+    /Saya punya \d+ rumus/,
+    /Topik yang tersedia/,
+    /Contoh: \*"/,
+    /Atau ketik \*"help"\*/,
+    /Topik:/,
+    /Untuk generate kode/,
+    /Saya bisa buatkan kode/,
+    /Saya ada \d+/,
+    /fitur Web Utama/,
+    /maaf.*belum bisa/,
+  ];
+
+  return templatePatterns.some(pattern => pattern.test(response));
 }
