@@ -5,17 +5,19 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 // Supported AI providers
-type AIProvider = "openai" | "groq" | "deepseek" | "together";
+type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama";
 
 function getAIConfig(): { provider: AIProvider; apiKey: string; baseUrl: string; model: string } {
   const provider = (process.env.AI_PROVIDER || "groq") as AIProvider;
   const apiKey = process.env.AI_API_KEY || "";
+  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
 
   const configs: Record<AIProvider, { baseUrl: string; model: string }> = {
     openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
     groq: { baseUrl: "https://api.groq.com/openai/v1", model: "llama-3.1-8b-instant" },
     deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
     together: { baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3-8b-chat-hf" },
+    ollama: { baseUrl: ollamaUrl, model: process.env.OLLAMA_MODEL || "llama3.1" },
   };
 
   return { provider, apiKey, baseUrl: configs[provider].baseUrl, model: configs[provider].model };
@@ -24,7 +26,8 @@ function getAIConfig(): { provider: AIProvider; apiKey: string; baseUrl: string;
 async function callExternalAI(question: string, existingKnowledge: string): Promise<string> {
   const config = getAIConfig();
 
-  if (!config.apiKey) {
+  // Ollama doesn't need API key
+  if (config.provider !== "ollama" && !config.apiKey) {
     throw new Error("AI_API_KEY not configured");
   }
 
@@ -35,6 +38,31 @@ Format your response with markdown for readability (bold, code blocks, lists).
 
 ${existingKnowledge ? `Existing knowledge base context:\n${existingKnowledge}\n\nUse this context if relevant, but provide your own knowledge if the context is insufficient.` : ""}`;
 
+  // Ollama uses different API format
+  if (config.provider === "ollama") {
+    const response = await fetch(`${config.baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: question },
+        ],
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Ollama error (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    return data.message?.content || "Sorry, I couldn't generate an answer.";
+  }
+
+  // OpenAI-compatible API (Groq, OpenAI, DeepSeek, Together)
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
