@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  LayoutDashboard, Link2, Radio, Brain, BarChart3,
+  LayoutDashboard, Link2, Radio, Brain, BarChart3, GraduationCap,
   ArrowLeft, Shield, LogOut
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
@@ -17,6 +17,7 @@ const adminLinks = [
   { href: "/master/links", label: "Links", icon: Link2 },
   { href: "/master/broadcasts", label: "Broadcasts", icon: Radio },
   { href: "/master/ai-settings", label: "AI Knowledge", icon: Brain },
+  { href: "/master/ai-train", label: "AI Training", icon: GraduationCap },
   { href: "/master/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
