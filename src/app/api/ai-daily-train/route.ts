@@ -160,14 +160,14 @@ function detectCategory(question: string): string {
   return "general";
 }
 
-// Determine best available provider: xAI > Groq > Ollama > others
-type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai";
+// Determine best available provider
+type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud";
 
 function getBestProvider(): AIProvider {
   const explicit = process.env.AI_PROVIDER as AIProvider | undefined;
   if (explicit) return explicit;
   if (process.env.AI_API_KEY?.startsWith("xai-")) return "xai";
-  if (process.env.AI_API_KEY) return "groq";
+  if (process.env.AI_API_KEY) return "ollama-cloud";
   return "ollama";
 }
 const SYSTEM_PROMPT = `Kamu adalah AI expert yang memberikan jawaban LENGKAP dan MENDALAM.
@@ -185,6 +185,7 @@ async function callWithProvider(provider: AIProvider, apiKey: string, question: 
     deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
     together: { baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3-8b-chat-hf" },
     xai: { baseUrl: "https://api.x.ai/v1", model: "grok-3-mini" },
+    "ollama-cloud": { baseUrl: "https://ollama.com/v1", model: "gpt-oss:20b" },
     ollama: { baseUrl: process.env.OLLAMA_URL || "http://localhost:11434", model: process.env.OLLAMA_MODEL || "llama3.2" },
   };
 
@@ -238,7 +239,7 @@ async function callExternalAI(question: string): Promise<string> {
   }
 
   // Fallback chain: try other providers
-  const fallbacks: AIProvider[] = (["xai", "groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary);
+  const fallbacks: AIProvider[] = (["ollama-cloud", "xai", "groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary);
   for (const fb of fallbacks) {
     try {
       const key = fb === "ollama" ? "" : (process.env.AI_API_KEY || "");
