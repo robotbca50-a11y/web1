@@ -238,28 +238,36 @@ async function callWithProvider(provider: AIProvider, apiKey: string, question: 
 }
 
 async function callExternalAI(question: string): Promise<string> {
-  const primary = getBestProvider();
   const apiKey = process.env.AI_API_KEY || "";
+  const primary = getBestProvider();
 
   // Try primary provider first
   try {
-    return await callWithProvider(primary, apiKey, question);
+    const result = await callWithProvider(primary, apiKey, question);
+    return result;
   } catch (e) {
-    console.log(`[AI] ${primary} failed: ${e instanceof Error ? e.message : e}, trying fallback...`);
+    console.log(`[AI] ${primary} failed: ${e instanceof Error ? e.message : e}`);
   }
 
-  // Fallback chain: try other providers
-  const fallbacks: AIProvider[] = (["ollama-cloud", "xai", "groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary && hasProviderKey(p));
-  for (const fb of fallbacks) {
+  // Fallback: always try ollama-cloud if we have an API key
+  if (apiKey && primary !== "ollama-cloud") {
     try {
-      const key = fb === "ollama" ? "" : apiKey;
-      const result = await callWithProvider(fb, key, question);
-      console.log(`[AI] Fallback ${fb} succeeded!`);
+      const result = await callWithProvider("ollama-cloud", apiKey, question);
+      console.log("[AI] Fallback ollama-cloud succeeded!");
       return result;
-    } catch (e) { console.log(`[AI] ${fb} failed: ${e instanceof Error ? e.message : e}`); }
+    } catch (e) { console.log(`[AI] ollama-cloud failed: ${e instanceof Error ? e.message : e}`); }
   }
 
-  throw new Error("All AI providers failed. Check your API keys and network.");
+  // Fallback: try local ollama if primary wasn't ollama
+  if (primary !== "ollama") {
+    try {
+      const result = await callWithProvider("ollama", "", question);
+      console.log("[AI] Fallback local ollama succeeded!");
+      return result;
+    } catch (e) { console.log(`[AI] local ollama failed: ${e instanceof Error ? e.message : e}`); }
+  }
+
+  throw new Error("All AI providers failed. Set AI_API_KEY env var for Ollama Cloud.");
 }
 
 // GET: Get today's training session status

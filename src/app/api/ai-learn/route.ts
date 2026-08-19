@@ -66,15 +66,23 @@ ${existingKnowledge ? `Existing knowledge base:\n${existingKnowledge}\n\nUse thi
     console.log(`[AI] ${primary} failed: ${e instanceof Error ? e.message : e}`);
   }
 
-  const fallbacks: AIProvider[] = (["ollama-cloud", "xai", "groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary);
-  for (const fb of fallbacks) {
+  // Fallback: try ollama-cloud if we have API key
+  if (apiKey && primary !== "ollama-cloud") {
     try {
-      const result = await callWithProvider(fb, fb === "ollama" ? "" : apiKey, systemPrompt, question);
-      console.log(`[AI] Fallback ${fb} succeeded!`);
+      const result = await callWithProvider("ollama-cloud", apiKey, systemPrompt, question);
+      console.log("[AI] Fallback ollama-cloud succeeded!");
       return result;
     } catch { /* skip */ }
   }
-  throw new Error("All AI providers failed.");
+
+  // Fallback: try local ollama
+  if (primary !== "ollama") {
+    try {
+      return await callWithProvider("ollama", "", systemPrompt, question);
+    } catch { /* skip */ }
+  }
+
+  throw new Error("All AI providers failed. Set AI_API_KEY for Ollama Cloud.");
 }
 
 function detectCategory(question: string): string {
