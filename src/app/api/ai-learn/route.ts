@@ -57,7 +57,7 @@ RULES:
 
 ${existingKnowledge ? `Existing knowledge base:\n${existingKnowledge}\n\nUse this if relevant, but always provide your OWN comprehensive knowledge.` : ""}`;
 
-  const primary: AIProvider = process.env.AI_API_KEY?.startsWith("xai-") ? "xai" : process.env.AI_API_KEY ? "ollama-cloud" : (process.env.AI_PROVIDER as AIProvider) || "ollama-cloud";
+  const primary: AIProvider = process.env.AI_API_KEY?.startsWith("xai-") ? "xai" : process.env.AI_API_KEY ? "ollama-cloud" : (process.env.AI_PROVIDER as AIProvider) || "ollama";
   const apiKey = process.env.AI_API_KEY || "";
 
   try {

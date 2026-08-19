@@ -164,11 +164,21 @@ function detectCategory(question: string): string {
 type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud";
 
 function getBestProvider(): AIProvider {
-  const explicit = process.env.AI_PROVIDER as AIProvider | undefined;
-  if (explicit) return explicit;
+  // If API key exists, use cloud (regardless of AI_PROVIDER setting)
   if (process.env.AI_API_KEY?.startsWith("xai-")) return "xai";
   if (process.env.AI_API_KEY) return "ollama-cloud";
+  // No API key — check explicit provider
+  const explicit = process.env.AI_PROVIDER as AIProvider | undefined;
+  if (explicit) return explicit;
   return "ollama";
+}
+
+function hasProviderKey(p: AIProvider): boolean {
+  if (p === "ollama") return true; // always try local
+  if (p === "ollama-cloud" && process.env.AI_API_KEY) return true;
+  if (p === "xai" && process.env.AI_API_KEY?.startsWith("xai-")) return true;
+  if (p === "groq" && process.env.AI_API_KEY && !process.env.AI_API_KEY.startsWith("xai-")) return true;
+  return false;
 }
 const SYSTEM_PROMPT = `Kamu adalah AI expert yang memberikan jawaban LENGKAP dan MENDALAM.
 Jawab dalam bahasa yang SAMA dengan pertanyaan (Indonesian/English).
@@ -239,14 +249,14 @@ async function callExternalAI(question: string): Promise<string> {
   }
 
   // Fallback chain: try other providers
-  const fallbacks: AIProvider[] = (["ollama-cloud", "xai", "groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary);
+  const fallbacks: AIProvider[] = (["ollama-cloud", "xai", "groq", "ollama", "deepseek", "together", "openai"] as AIProvider[]).filter(p => p !== primary && hasProviderKey(p));
   for (const fb of fallbacks) {
     try {
-      const key = fb === "ollama" ? "" : (process.env.AI_API_KEY || "");
+      const key = fb === "ollama" ? "" : apiKey;
       const result = await callWithProvider(fb, key, question);
       console.log(`[AI] Fallback ${fb} succeeded!`);
       return result;
-    } catch { /* skip */ }
+    } catch (e) { console.log(`[AI] ${fb} failed: ${e instanceof Error ? e.message : e}`); }
   }
 
   throw new Error("All AI providers failed. Check your API keys and network.");
