@@ -173,6 +173,9 @@ export default function TypingTestPage() {
       mode,
       text_content: text.substring(0, 200),
       max_wpm: maxWpm,
+      completed_at: new Date().toISOString(),
+    }).then(({ error }: { error: unknown }) => {
+      if (error) console.error("Failed to save typing result:", error);
     });
   }, [correctChars, incorrectChars, wpm, difficulty, mode, text, maxWpm]);
 

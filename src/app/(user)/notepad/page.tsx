@@ -86,6 +86,7 @@ export default function NotepadPage() {
   };
 
   const deleteNotepad = async (id: string) => {
+    if (!confirm("Yakin ingin menghapus catatan ini?")) return;
     const supabase = createClient();
     await supabase.from("notepads").delete().eq("id", id);
     setNotepads((prev) => prev.filter((n) => n.id !== id));

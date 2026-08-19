@@ -54,8 +54,8 @@ export function AIChatbot() {
     setIsLoading(true);
 
     try {
-      // Build conversation history from local state
-      const conversationHistory = messages
+      // Build conversation history including current message (state is stale)
+      const conversationHistory = [...messages, userMsg]
         .map((m) => `${m.role}: ${m.content}`)
         .join("\n");
 

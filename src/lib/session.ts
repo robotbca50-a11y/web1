@@ -1,6 +1,9 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-const SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY || "fallback-secret";
+const SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SECRET) {
+  console.error("[SECURITY] SUPABASE_SERVICE_ROLE_KEY is not set! Session signing is insecure.");
+}
 const COOKIE_NAME = "master_session";
 
 interface SessionPayload {
@@ -10,6 +13,7 @@ interface SessionPayload {
 }
 
 export function signSession(payload: SessionPayload): string {
+  if (!SECRET) throw new Error("Session signing unavailable: SUPABASE_SERVICE_ROLE_KEY not set");
   const data = JSON.stringify(payload);
   const encoded = Buffer.from(data).toString("base64url");
   const sig = createHmac("sha256", SECRET).update(encoded).digest("base64url");
@@ -17,6 +21,7 @@ export function signSession(payload: SessionPayload): string {
 }
 
 export function verifySession(token: string): SessionPayload | null {
+  if (!SECRET) return null;
   try {
     const [encoded, sig] = token.split(".");
     if (!encoded || !sig) return null;

@@ -204,6 +204,8 @@ export default function LinksPage() {
               className="w-full px-3 py-2 rounded-lg text-sm"
               style={{ background: theme.colors.surface, color: theme.colors.text, border: `1px solid ${theme.colors.border}` }}
               placeholder="https://example.com"
+              type="url"
+              required
             />
           </div>
           <div>

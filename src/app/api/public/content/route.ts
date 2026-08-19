@@ -15,7 +15,7 @@ export async function GET() {
 
   const [linksRes, broadcastsRes] = await Promise.all([
     admin.from("links").select("*").eq("is_active", true).order("order_index"),
-    admin.from("broadcasts").select("*").eq("is_active", true).order("created_at", { ascending: false }).limit(5),
+    admin.from("broadcasts").select("*").eq("is_active", true).order("created_at", { ascending: false }),
   ]);
 
   return NextResponse.json({

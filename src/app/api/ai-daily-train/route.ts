@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdmin } from "@/lib/admin-auth";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseServiceKey = process.env.SUPABASE_SECRET_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 // Load question pool (we'll generate on-the-fly using same algorithm as engine)
 const QUESTION_POOL = [
@@ -299,6 +300,9 @@ export async function GET() {
 // POST: Train today's questions (or specific batch)
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireAdmin();
+    if ("error" in auth) return auth.error;
+
     const body = await req.json().catch(() => ({}));
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
