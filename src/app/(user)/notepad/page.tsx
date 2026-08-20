@@ -115,7 +115,10 @@ export default function NotepadPage() {
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <FileText size={48} className="mx-auto mb-4 opacity-30" style={{ color: theme.colors.textMuted }} />
         <h2 className="text-xl font-bold mb-2" style={{ color: theme.colors.text }}>Notepad</h2>
-        <p style={{ color: theme.colors.textMuted }}>Klik tombol + untuk membuat catatan baru</p>
+        <p className="mb-4" style={{ color: theme.colors.textMuted }}>Belum ada catatan. Klik tombol di bawah untuk membuat catatan baru.</p>
+        <Button onClick={createNotepad} glow>
+          <Plus size={16} /> Buat Catatan Baru
+        </Button>
       </div>
     );
   }
