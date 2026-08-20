@@ -7,9 +7,11 @@ import { Particles } from "@/components/particles";
 import { AIChatbot } from "@/components/ai-chatbot";
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setMounted(true);
     const visited = sessionStorage.getItem("webutama-loaded");
     if (visited) {
       setLoading(false);
@@ -21,7 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     sessionStorage.setItem("webutama-loaded", "true");
   };
 
-  if (loading) {
+  if (!mounted || loading) {
     return <LoadingScreen onComplete={handleLoadingComplete} />;
   }
 

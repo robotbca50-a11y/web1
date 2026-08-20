@@ -39,7 +39,9 @@ async function callWithProvider(provider: AIProvider, apiKey: string, systemProm
   });
   if (!res.ok) { const e = await res.text(); throw new Error(`${provider} ${res.status}: ${e.substring(0, 100)}`); }
   const d = await res.json();
-  return d.choices?.[0]?.message?.content || "";
+  const content = d.choices?.[0]?.message?.content || "";
+  const reasoning = d.choices?.[0]?.message?.reasoning || "";
+  return content || reasoning || "";
 }
 
 async function callExternalAI(question: string, existingKnowledge: string): Promise<string> {

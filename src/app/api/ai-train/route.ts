@@ -148,11 +148,13 @@ async function callWithProvider(provider: AIProvider, apiKey: string, systemProm
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: cfg.model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: question }], max_tokens: 2048, temperature: 0.7 }),
+    body: JSON.stringify({ model: cfg.model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: question }], max_tokens: 4096, temperature: 0.7 }),
   });
   if (!res.ok) { const e = await res.text(); throw new Error(`${provider} ${res.status}: ${e.substring(0, 100)}`); }
   const d = await res.json();
-  return d.choices?.[0]?.message?.content || "";
+  const content = d.choices?.[0]?.message?.content || "";
+  const reasoning = d.choices?.[0]?.message?.reasoning || "";
+  return content || reasoning || "";
 }
 
 async function callExternalAI(question: string): Promise<string> {
@@ -335,6 +337,9 @@ export async function GET() {
 
     const remaining = QUESTION_POOL.length - (totalLearned || 0);
 
+    const apiKey = process.env.AI_API_KEY || "";
+    const provider = apiKey.startsWith("xai-") ? "xai" : apiKey ? "ollama-cloud" : "ollama";
+
     return NextResponse.json({
       totalLearned: totalLearned || 0,
       totalPool: QUESTION_POOL.length,
@@ -342,8 +347,10 @@ export async function GET() {
       byCategory: byCategory,
       topUsed: topUsed || [],
       recentTrained: recent || [],
+      aiProvider: provider,
+      hasApiKey: apiKey.length > 0,
       ollamaUrl: process.env.OLLAMA_URL || "http://localhost:11434",
-      ollamaModel: process.env.OLLAMA_MODEL || "llama3.1",
+      ollamaModel: process.env.OLLAMA_MODEL || "llama3.2",
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
