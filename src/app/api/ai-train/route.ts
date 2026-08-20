@@ -253,12 +253,23 @@ async function trainBatch(count: number = 10): Promise<{
           source: "ollama_training",
           usage_count: 0,
         },
-        { onConflict: "idx_ai_learned_unique_question" }
+        { onConflict: "question" }
       );
 
       if (error) {
-        results.push({ question, answer: answer.substring(0, 100), status: "db_error" });
-        failed++;
+        // If upsert fails with conflict, try update
+        const { error: updateErr } = await supabase
+          .from("ai_learned_knowledge")
+          .update({ answer, category, source: "ollama_training" })
+          .eq("question", question.trim());
+
+        if (updateErr) {
+          results.push({ question, answer: `DB error: ${error.message} | Update: ${updateErr.message}`, status: "db_error" });
+          failed++;
+        } else {
+          results.push({ question, answer: answer.substring(0, 150) + "...", status: "success" });
+          trained++;
+        }
       } else {
         results.push({ question, answer: answer.substring(0, 150) + "...", status: "success" });
         trained++;

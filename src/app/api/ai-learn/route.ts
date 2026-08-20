@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
     // 4. Save learned Q&A to database (upsert - don't duplicate)
     const category = detectCategory(trimmed);
     try {
-      await supabase.from("ai_learned_knowledge").upsert(
+      const { error } = await supabase.from("ai_learned_knowledge").upsert(
         {
           question: trimmed,
           answer: answer,
@@ -168,8 +168,14 @@ export async function POST(req: NextRequest) {
           source: "ai_api",
           usage_count: 1,
         },
-        { onConflict: "idx_ai_learned_unique_question" }
+        { onConflict: "question" }
       );
+      if (error) {
+        await supabase
+          .from("ai_learned_knowledge")
+          .update({ answer, source: "ai_api" })
+          .eq("question", trimmed);
+      }
     } catch {
       // Save failed, but we still have the answer
       console.warn("Failed to save learned knowledge");
