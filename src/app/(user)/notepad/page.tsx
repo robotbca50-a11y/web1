@@ -8,8 +8,6 @@ import {
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
-import { useAuthStore } from "@/store/auth";
-import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { Notepad } from "@/lib/types";
@@ -22,79 +20,82 @@ export default function NotepadPage() {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
-  const user = useAuthStore((s) => s.user);
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
 
   const loadNotepads = useCallback(async () => {
-    if (!user) return;
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("notepads")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("is_pinned", { ascending: false })
-      .order("updated_at", { ascending: false });
-
-    if (data) setNotepads(data);
-  }, [user]);
+    try {
+      const res = await fetch("/api/notepad");
+      const json = await res.json();
+      if (json.data) setNotepads(json.data);
+    } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     loadNotepads();
   }, [loadNotepads]);
 
   const createNotepad = async () => {
-    if (!user) return;
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("notepads")
-      .insert({ user_id: user.id, title: "Catatan Baru", content: "" })
-      .select()
-      .single();
-
-    if (data) {
-      setNotepads((prev) => [data, ...prev]);
-      setSelectedId(data.id);
-      setTitle(data.title || "");
-      setContent(data.content);
+    try {
+      const res = await fetch("/api/notepad", { method: "POST" });
+      const json = await res.json();
+      if (json.data) {
+        setNotepads((prev) => [json.data, ...prev]);
+        setSelectedId(json.data.id);
+        setTitle(json.data.title || "");
+        setContent(json.data.content || "");
+      } else {
+        alert("Gagal membuat catatan: " + (json.error || "Unknown error"));
+      }
+    } catch (e) {
+      alert("Gagal membuat catatan: " + (e instanceof Error ? e.message : "Network error"));
     }
   };
 
   const saveNotepad = async () => {
     if (!selectedId) return;
     setSaving(true);
-    const supabase = createClient();
-    await supabase
-      .from("notepads")
-      .update({ title, content, updated_at: new Date().toISOString() })
-      .eq("id", selectedId);
-
+    try {
+      const res = await fetch("/api/notepad", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedId, title, content }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setLastSaved(new Date().toLocaleTimeString("id-ID"));
+        loadNotepads();
+      } else {
+        alert("Gagal save: " + (json.error || "Unknown error"));
+      }
+    } catch (e) {
+      alert("Gagal save: " + (e instanceof Error ? e.message : "Network error"));
+    }
     setSaving(false);
-    setLastSaved(new Date().toLocaleTimeString("id-ID"));
-    loadNotepads();
   };
 
   const togglePin = async (id: string, current: boolean) => {
-    const supabase = createClient();
-    await supabase.from("notepads").update({ is_pinned: !current }).eq("id", id);
-    loadNotepads();
-    if (selectedId === id) {
-      setNotepads((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_pinned: !current } : n))
-      );
-    }
+    try {
+      await fetch("/api/notepad", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, is_pinned: !current }),
+      });
+      loadNotepads();
+    } catch { /* ignore */ }
   };
 
   const deleteNotepad = async (id: string) => {
     if (!confirm("Yakin ingin menghapus catatan ini?")) return;
-    const supabase = createClient();
-    await supabase.from("notepads").delete().eq("id", id);
-    setNotepads((prev) => prev.filter((n) => n.id !== id));
-    if (selectedId === id) {
-      setSelectedId(null);
-      setTitle("");
-      setContent("");
-    }
+    try {
+      await fetch(`/api/notepad?id=${id}`, { method: "DELETE" });
+      setNotepads((prev) => prev.filter((n) => n.id !== id));
+      if (selectedId === id) {
+        setSelectedId(null);
+        setTitle("");
+        setContent("");
+      }
+    } catch { /* ignore */ }
   };
 
   const selectNotepad = (n: Notepad) => {
@@ -109,12 +110,12 @@ export default function NotepadPage() {
       n.content.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (!user) {
+  if (notepads.length === 0 && !search) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <FileText size={48} className="mx-auto mb-4 opacity-30" style={{ color: theme.colors.textMuted }} />
-        <h2 className="text-xl font-bold mb-2" style={{ color: theme.colors.text }}>Login Diperlukan</h2>
-        <p style={{ color: theme.colors.textMuted }}>Silakan login untuk menggunakan Notepad</p>
+        <h2 className="text-xl font-bold mb-2" style={{ color: theme.colors.text }}>Notepad</h2>
+        <p style={{ color: theme.colors.textMuted }}>Klik tombol + untuk membuat catatan baru</p>
       </div>
     );
   }

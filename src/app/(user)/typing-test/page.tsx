@@ -95,13 +95,14 @@ export default function TypingTestPage() {
     setCurrentCharIdx(0);
   }, [difficulty, language]);
 
-  // Timer
+  // Timer - only depends on isActive and isFinished (not timeLeft!)
   useEffect(() => {
-    if (isActive && timeLeft > 0 && !isFinished) {
+    if (isActive && !isFinished) {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
-            finishTest();
+            if (timerRef.current) clearInterval(timerRef.current);
+            setTimeout(() => finishTest(), 0);
             return 0;
           }
           return prev - 1;
@@ -111,7 +112,7 @@ export default function TypingTestPage() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isActive, timeLeft, isFinished]);
+  }, [isActive, isFinished]);
 
   // Calculate live WPM
   useEffect(() => {
