@@ -23,7 +23,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     sessionStorage.setItem("webutama-loaded", "true");
   };
 
-  if (!mounted || loading) {
+  if (!mounted) {
+    return <div className="min-h-screen" />;
+  }
+
+  if (loading) {
     return <LoadingScreen onComplete={handleLoadingComplete} />;
   }
 

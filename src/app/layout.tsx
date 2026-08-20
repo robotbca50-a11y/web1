@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
-import { AuthProvider } from "@/components/auth-provider";
-import { AppShell } from "@/components/app-shell";
-import { ErrorBoundary } from "@/components/error-boundary";
+import { ClientShell } from "@/components/client-shell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,15 +24,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="id"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col" style={{ background: "var(--theme-bg)", color: "var(--theme-text)" }}>
-        <ThemeProvider>
-          <ErrorBoundary>
-            <AuthProvider>
-              <AppShell>{children}</AppShell>
-            </AuthProvider>
-          </ErrorBoundary>
-        </ThemeProvider>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning style={{ background: "var(--theme-bg)", color: "var(--theme-text)" }}>
+        <ClientShell>{children}</ClientShell>
       </body>
     </html>
   );
