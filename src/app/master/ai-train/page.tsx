@@ -11,20 +11,24 @@ interface TrainingStatus {
   byCategory: Record<string, number>;
   topUsed: Array<{ question: string; usage_count: number }>;
   recentTrained: Array<{ question: string; category: string; created_at: string }>;
+  aiProvider: string;
+  hasApiKey: boolean;
   ollamaUrl: string;
   ollamaModel: string;
 }
 
-interface TrainResult {
-  trained: number;
-  failed: number;
-  questions: Array<{ question: string; answer: string; status: string }>;
+interface TrainItem {
+  question: string;
+  category: string;
+  status: "pending" | "loading" | "success" | "failed";
+  answer?: string;
 }
 
 export default function AITrainPage() {
   const [status, setStatus] = useState<TrainingStatus | null>(null);
   const [training, setTraining] = useState(false);
-  const [result, setResult] = useState<TrainResult | null>(null);
+  const [items, setItems] = useState<TrainItem[]>([]);
+  const [progress, setProgress] = useState({ done: 0, total: 0, trained: 0, failed: 0 });
   const [count, setCount] = useState(10);
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
@@ -45,21 +49,68 @@ export default function AITrainPage() {
 
   const startTraining = async () => {
     setTraining(true);
-    setResult(null);
-    try {
-      const res = await fetch("/api/ai-train", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count }),
+    setItems([]);
+    setProgress({ done: 0, total: count, trained: 0, failed: 0 });
+
+    for (let i = 0; i < count; i++) {
+      setProgress((p) => ({ ...p, done: i, total: count }));
+
+      const pendingItem: TrainItem = { question: `Question ${i + 1}...`, category: "", status: "loading" };
+      setItems((prev) => {
+        const updated = [...prev];
+        if (updated[i]) {
+          updated[i] = { ...updated[i], status: "loading" };
+        }
+        return updated;
       });
-      const data = await res.json();
-      setResult(data);
-      fetchStatus(); // refresh stats
-    } catch (err) {
-      console.error("Training failed:", err);
-    } finally {
-      setTraining(false);
+
+      try {
+        const res = await fetch("/api/ai-train", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ count: 1 }),
+        });
+        const data = await res.json();
+
+        if (data.questions && data.questions.length > 0) {
+          const q = data.questions[0];
+          setItems((prev) => {
+            const updated = [...prev];
+            updated[i] = {
+              question: q.question,
+              category: q.category || "",
+              status: q.status === "success" ? "success" : "failed",
+              answer: q.answer,
+            };
+            return updated;
+          });
+          setProgress((p) => ({
+            ...p,
+            trained: p.trained + (q.status === "success" ? 1 : 0),
+            failed: p.failed + (q.status !== "success" ? 1 : 0),
+          }));
+        } else {
+          setItems((prev) => {
+            const updated = [...prev];
+            updated[i] = { question: "No response", category: "", status: "failed", answer: "Empty response from API" };
+            return updated;
+          });
+          setProgress((p) => ({ ...p, failed: p.failed + 1 }));
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Network error";
+        setItems((prev) => {
+          const updated = [...prev];
+          updated[i] = { question: `Error ${i + 1}`, category: "", status: "failed", answer: msg };
+          return updated;
+        });
+        setProgress((p) => ({ ...p, failed: p.failed + 1 }));
+      }
     }
+
+    setProgress((p) => ({ ...p, done: p.total }));
+    setTraining(false);
+    fetchStatus();
   };
 
   return (
@@ -81,14 +132,18 @@ export default function AITrainPage() {
           <div className="text-xs" style={{ color: theme.colors.textMuted }}>untrained questions</div>
         </div>
         <div className="rounded-xl p-4" style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
-          <div className="text-sm" style={{ color: theme.colors.textMuted }}>Ollama Model</div>
-          <div className="text-lg font-bold" style={{ color: theme.colors.text }}>{status?.ollamaModel || "llama3.1" }</div>
-          <div className="text-xs" style={{ color: theme.colors.textMuted }}>{status?.ollamaUrl || "localhost:11434"}</div>
+          <div className="text-sm" style={{ color: theme.colors.textMuted }}>AI Provider</div>
+          <div className="text-lg font-bold" style={{ color: status?.hasApiKey ? "#22c55e" : "#ef4444" }}>
+            {status?.aiProvider || "unknown"}
+          </div>
+          <div className="text-xs" style={{ color: theme.colors.textMuted }}>
+            API Key: {status?.hasApiKey ? "Configured" : "NOT SET"}
+          </div>
         </div>
       </div>
 
       {/* Category Breakdown */}
-      {status?.byCategory && (
+      {status?.byCategory && Object.keys(status.byCategory).length > 0 && (
         <div className="rounded-xl p-4 mb-6" style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
           <h3 className="font-bold mb-3" style={{ color: theme.colors.text }}>By Category</h3>
           <div className="flex flex-wrap gap-2">
@@ -109,7 +164,7 @@ export default function AITrainPage() {
       <div className="rounded-xl p-6 mb-6" style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
         <h3 className="font-bold mb-4" style={{ color: theme.colors.text }}>Start Training</h3>
         <div className="flex items-center gap-4 mb-4">
-          <label style={{ color: theme.colors.text }}>Questions per batch:</label>
+          <label style={{ color: theme.colors.text }}>Questions:</label>
           <input
             type="number"
             value={count}
@@ -128,38 +183,67 @@ export default function AITrainPage() {
               color: theme.colors.background,
             }}
           >
-            {training ? "Training..." : "Start Training"}
+            {training ? `Training... (${progress.done}/${progress.total})` : "Start Training"}
           </button>
         </div>
         <p className="text-xs" style={{ color: theme.colors.textMuted }}>
-          Sends random questions to Ollama, saves answers. Each batch trains {count} questions.
+          Trains one question at a time. Each question ~15-30 seconds.
         </p>
       </div>
 
-      {/* Training Result */}
-      {result && (
-        <div className="rounded-xl p-6 mb-6" style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
-          <h3 className="font-bold mb-3" style={{ color: theme.colors.text }}>
-            Training Result
-          </h3>
-          <div className="flex gap-4 mb-4">
-            <span className="text-green-400">✓ {result.trained} trained</span>
-            <span className="text-red-400">✗ {result.failed} failed</span>
+      {/* Live Progress */}
+      {training && (
+        <div className="rounded-xl p-4 mb-6" style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+          <div className="flex justify-between text-sm mb-2">
+            <span style={{ color: theme.colors.text }}>Progress</span>
+            <span style={{ color: theme.colors.textMuted }}>{progress.done}/{progress.total}</span>
           </div>
+          <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: theme.colors.background }}>
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${(progress.done / Math.max(progress.total, 1)) * 100}%`,
+                background: `linear-gradient(90deg, ${theme.colors.primary}, ${theme.colors.secondary})`,
+              }}
+            />
+          </div>
+          <div className="flex gap-4 mt-2 text-xs">
+            <span className="text-green-400">✓ {progress.trained} trained</span>
+            <span className="text-red-400">✗ {progress.failed} failed</span>
+          </div>
+        </div>
+      )}
+
+      {/* Training Results */}
+      {items.length > 0 && (
+        <div className="rounded-xl p-6 mb-6" style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+          <h3 className="font-bold mb-3" style={{ color: theme.colors.text }}>Results</h3>
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {result.questions.map((q, i) => (
+            {items.map((item, i) => (
               <div
                 key={i}
                 className="p-3 rounded-lg text-sm"
                 style={{
-                  background: q.status === "success" ? "#22c55e10" : "#ef444410",
-                  border: `1px solid ${q.status === "success" ? "#22c55e30" : "#ef444430"}`,
+                  background: item.status === "success" ? "#22c55e10" : item.status === "failed" ? "#ef444410" : theme.colors.background,
+                  border: `1px solid ${item.status === "success" ? "#22c55e30" : item.status === "failed" ? "#ef444430" : theme.colors.border}`,
                 }}
               >
-                <div className="font-medium" style={{ color: theme.colors.text }}>{q.question}</div>
-                <div className="text-xs mt-1" style={{ color: theme.colors.textMuted }}>
-                  {q.status === "success" ? q.answer : `Failed: ${q.answer}`}
+                <div className="flex items-center gap-2">
+                  {item.status === "loading" && <span className="animate-spin">⏳</span>}
+                  {item.status === "success" && <span className="text-green-400">✓</span>}
+                  {item.status === "failed" && <span className="text-red-400">✗</span>}
+                  <span className="font-medium" style={{ color: theme.colors.text }}>{item.question}</span>
+                  {item.category && (
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: `${theme.colors.primary}20`, color: theme.colors.primary }}>
+                      {item.category}
+                    </span>
+                  )}
                 </div>
+                {item.answer && (
+                  <div className="text-xs mt-1" style={{ color: theme.colors.textMuted }}>
+                    {item.status === "success" ? item.answer.substring(0, 120) + "..." : item.answer}
+                  </div>
+                )}
               </div>
             ))}
           </div>
