@@ -119,32 +119,69 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled;
 }
 
-async function callOllama(question: string): Promise<string> {
-  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
-  const model = process.env.OLLAMA_MODEL || "llama3.1";
+type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud";
 
-  const response = await fetch(`${ollamaUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: "system",
-          content: "Kamu adalah AI assistant yang membantu menjawab pertanyaan dengan akurat dan lengkap. Jawab dalam bahasa yang sama dengan pertanyaan. Berikan contoh jika relevan."
-        },
-        { role: "user", content: question },
-      ],
-      stream: false,
-    }),
-  });
+async function callWithProvider(provider: AIProvider, apiKey: string, systemPrompt: string, question: string): Promise<string> {
+  const configs: Record<AIProvider, { baseUrl: string; model: string }> = {
+    openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+    groq: { baseUrl: "https://api.groq.com/openai/v1", model: "llama-3.1-8b-instant" },
+    deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+    together: { baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3-8b-chat-hf" },
+    xai: { baseUrl: "https://api.x.ai/v1", model: "grok-3-mini" },
+    "ollama-cloud": { baseUrl: "https://ollama.com/v1", model: "gpt-oss:20b" },
+    ollama: { baseUrl: process.env.OLLAMA_URL || "http://localhost:11434", model: process.env.OLLAMA_MODEL || "llama3.2" },
+  };
+  const cfg = configs[provider];
 
-  if (!response.ok) {
-    throw new Error(`Ollama error ${response.status}`);
+  if (provider === "ollama") {
+    const res = await fetch(`${cfg.baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: cfg.model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: question }], stream: false }),
+    });
+    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+    const d = await res.json();
+    return d.message?.content || "";
   }
 
-  const data = await response.json();
-  return data.message?.content || "";
+  if (!apiKey) throw new Error(`No API key for ${provider}`);
+  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: cfg.model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: question }], max_tokens: 2048, temperature: 0.7 }),
+  });
+  if (!res.ok) { const e = await res.text(); throw new Error(`${provider} ${res.status}: ${e.substring(0, 100)}`); }
+  const d = await res.json();
+  return d.choices?.[0]?.message?.content || "";
+}
+
+async function callExternalAI(question: string): Promise<string> {
+  const systemPrompt = "Kamu adalah AI assistant yang membantu menjawab pertanyaan dengan akurat dan lengkap. Jawab dalam bahasa yang sama dengan pertanyaan. Berikan contoh jika relevan.";
+
+  const apiKey = process.env.AI_API_KEY || "";
+  const primary: AIProvider = apiKey.startsWith("xai-") ? "xai" : apiKey ? "ollama-cloud" : "ollama";
+
+  try {
+    return await callWithProvider(primary, apiKey, systemPrompt, question);
+  } catch (e) {
+    console.log(`[AI-TRAIN] ${primary} failed: ${e instanceof Error ? e.message : e}`);
+  }
+
+  if (apiKey && primary !== "ollama-cloud") {
+    try {
+      const result = await callWithProvider("ollama-cloud", apiKey, systemPrompt, question);
+      console.log("[AI-TRAIN] Fallback ollama-cloud succeeded!");
+      return result;
+    } catch { /* skip */ }
+  }
+
+  if (primary !== "ollama") {
+    try {
+      return await callWithProvider("ollama", "", systemPrompt, question);
+    } catch { /* skip */ }
+  }
+
+  throw new Error("All AI providers failed. Set AI_API_KEY for Ollama Cloud.");
 }
 
 function detectCategory(question: string): string {
@@ -196,7 +233,7 @@ async function trainBatch(count: number = 10): Promise<{
 
   for (const question of selected) {
     try {
-      const answer = await callOllama(question);
+      const answer = await callExternalAI(question);
       if (!answer || answer.length < 10) {
         results.push({ question, answer: "(no answer)", status: "failed" });
         failed++;
