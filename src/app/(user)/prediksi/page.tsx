@@ -135,13 +135,10 @@ export default function PrediksiPage() {
     if (!resultRef.current) return;
     setCopying(true);
     try {
-      const { default: html2canvas } = await import("html2canvas");
-      const canvas = await html2canvas(resultRef.current, { backgroundColor: "#0d1117", useCORS: true });
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-    } catch {
-      const text = resultRef.current?.innerText;
+      const text = resultRef.current.innerText;
       if (text) await navigator.clipboard.writeText(text);
+    } catch {
+      // silent
     }
     setCopying(false);
   }, []);

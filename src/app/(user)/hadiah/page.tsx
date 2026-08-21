@@ -35,7 +35,7 @@ const MARKET_LOGOS: Record<string, string> = {
   "TOTO CAMBODIA": "https://totocambodialive.com/assets/img/logo.png",
 };
 
-type GameItem = { title: string; hadiah?: number; diskon?: number; kei?: number };
+type GameItem = { title?: string; hadiah?: number; diskon?: number; kei?: number };
 
 const KEI_MINUS: Record<string, boolean> = {
   "silang homo": true,
@@ -69,7 +69,7 @@ function prizeBlock(p14: number, p13: number, p12: number, p24: number, p23: num
   };
 }
 
-const BASE_MAP: Record<string, { hadiah: number; diskon?: number; kei?: number }> = {
+const BASE_MAP: Record<string, { hadiah?: number; diskon?: number; kei?: number }> = {
   "DISKON 4D": { hadiah: 3000, diskon: 66.5 },
   "DISKON 3D": { hadiah: 400, diskon: 59.5 },
   "DISKON 2D": { hadiah: 70, diskon: 29.5 },
@@ -178,7 +178,7 @@ function buildMarketConfig(name: string): { prize: boolean; map: Record<string, 
 
   const hasPrize = !["BULLSEYE", "CALIFORNIA", "CAROLINA EVE", "CAROLINA DAY", "FLORIDA EVE", "FLORIDA MID", "KENTUCKY EVE", "KENTUCKY MID", "NEW YORK EVE", "NEW YORK MID", "OREGON", "PCSO"].includes(name);
   if (hasPrize) {
-    for (const pk in PB) m[pk] = { ...PB[pk] };
+    for (const pk in PB) m[pk] = { ...(PB as Record<string, GameItem>)[pk] };
   }
   return { prize: hasPrize, map: m };
 }
@@ -234,19 +234,19 @@ export default function HadiahPage() {
     for (const k in config.map) {
       list.push({ title: k, ...config.map[k] });
     }
-    return list;
+    return list.filter((g) => !!g.title);
   }, [config]);
 
   const filteredItems = useMemo(() => {
     if (filter === "all") return items;
-    return items.filter((g) => tagOf(g.title) === filter);
+    return items.filter((g) => tagOf(g.title!) === filter);
   }, [items, filter]);
 
   const groupedItems = useMemo(() => {
     if (filter !== "all") return [{ tag: filter, items: filteredItems }];
     const order = ["diskon", "betfull", "prize", "tepatbb", "lain"];
     return order
-      .map((tag) => ({ tag, items: items.filter((g) => tagOf(g.title) === tag) }))
+      .map((tag) => ({ tag, items: items.filter((g) => tagOf(g.title!) === tag) }))
       .filter((g) => g.items.length > 0);
   }, [items, filteredItems, filter]);
 
@@ -307,26 +307,27 @@ export default function HadiahPage() {
   const minBet = (title: string) => (tagOf(title) === "lain" ? 1000 : 100);
 
   const renderCard = (game: GameItem) => {
-    const t = norm(game.title);
+    const title = game.title || "";
+    const t = norm(title);
     const isKei = !!KEI_MINUS[t] || !!KEI_PLUS[t] || game.kei != null;
-    const result = results[game.title];
+    const result = results[title];
     const diskon = game.diskon || 0;
     const hadiah = game.hadiah || 0;
     const kei = isKei ? game.kei || 0 : 0;
-    const mb = minBet(game.title);
+    const mb = minBet(title);
 
     return (
       <div
-        key={game.title}
+        key={title}
         className="rounded-xl p-4"
         style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}
       >
         <div className="mb-2">
           <h3
             className="font-bold text-sm"
-            style={{ color: theme.colors.text, fontSize: norm(game.title).includes("kembang") ? "13px" : undefined }}
+            style={{ color: theme.colors.text, fontSize: norm(title).includes("kembang") ? "13px" : undefined }}
           >
-            {game.title} :
+            {title} :
           </h3>
           <div className="text-xs mt-1" style={{ color: theme.colors.textMuted }}>
             {isKei
@@ -340,23 +341,23 @@ export default function HadiahPage() {
             type="number"
             inputMode="decimal"
             placeholder={`Min: ${idr(mb)}`}
-            value={values[game.title] || ""}
-            onChange={(e) => setValues((prev) => ({ ...prev, [game.title]: e.target.value }))}
-            onKeyDown={(e) => e.key === "Enter" && calc(game.title)}
+            value={values[title] || ""}
+            onChange={(e) => setValues((prev) => ({ ...prev, [title]: e.target.value }))}
+            onKeyDown={(e) => e.key === "Enter" && calc(title)}
             min={mb}
             step="any"
             className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
             style={{ background: theme.colors.background, color: theme.colors.text, border: `1px solid ${theme.colors.border}` }}
           />
           <button
-            onClick={() => calc(game.title)}
+            onClick={() => calc(title)}
             className="px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1 shrink-0"
             style={{ background: theme.colors.primary, color: theme.colors.background }}
           >
             <Calculator size={14} /> HITUNG
           </button>
           <button
-            onClick={() => resetCard(game.title)}
+            onClick={() => resetCard(title)}
             className="px-3 py-2 rounded-lg text-xs font-bold shrink-0"
             style={{ background: theme.colors.border, color: theme.colors.text }}
           >
@@ -380,7 +381,7 @@ export default function HadiahPage() {
             {result.steps.length > 0 && (
               <div className="mt-2 text-xs space-y-1">
                 <div className="font-bold text-xs mb-1" style={{ color: theme.colors.textMuted }}>Cara Perhitungan:</div>
-                {result.steps.map((step, i) => (
+                {result.steps.map((step: string, i: number) => (
                   <div key={i} className="pl-2" style={{ color: theme.colors.textMuted, borderLeft: `2px solid ${theme.colors.primary}30` }}>
                     {step}
                   </div>
@@ -443,7 +444,7 @@ export default function HadiahPage() {
         <div className="flex flex-wrap gap-2 mb-5">
           {TAB_DEFS.map((tab) => {
             if (tab.k === "prize" && !config?.prize) return null;
-            if (tab.k === "lain" && !items.some((g) => tagOf(g.title) === "lain")) return null;
+            if (tab.k === "lain" && !items.some((g) => tagOf(g.title!) === "lain")) return null;
             return (
               <button
                 key={tab.k}
