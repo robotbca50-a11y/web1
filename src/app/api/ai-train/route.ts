@@ -119,7 +119,7 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled;
 }
 
-type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud";
+type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud" | "openrouter";
 
 async function callWithProvider(provider: AIProvider, apiKey: string, systemPrompt: string, question: string): Promise<string> {
   const configs: Record<AIProvider, { baseUrl: string; model: string }> = {
@@ -129,6 +129,7 @@ async function callWithProvider(provider: AIProvider, apiKey: string, systemProm
     together: { baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3-8b-chat-hf" },
     xai: { baseUrl: "https://api.x.ai/v1", model: "grok-3-mini" },
     "ollama-cloud": { baseUrl: "https://ollama.com/v1", model: "gpt-oss:20b" },
+    openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o" },
     ollama: { baseUrl: process.env.OLLAMA_URL || "http://localhost:11434", model: process.env.OLLAMA_MODEL || "llama3.2" },
   };
   const cfg = configs[provider];
@@ -173,6 +174,15 @@ async function callExternalAI(question: string): Promise<string> {
     try {
       const result = await callWithProvider("ollama-cloud", apiKey, systemPrompt, question);
       console.log("[AI-TRAIN] Fallback ollama-cloud succeeded!");
+      return result;
+    } catch { /* skip */ }
+  }
+
+  const OR_KEY = "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";
+  if (primary !== "openrouter") {
+    try {
+      const result = await callWithProvider("openrouter", OR_KEY, systemPrompt, question);
+      console.log("[AI-TRAIN] Fallback openrouter succeeded!");
       return result;
     } catch { /* skip */ }
   }

@@ -161,7 +161,7 @@ function detectCategory(question: string): string {
 }
 
 // Determine best available provider
-type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud";
+type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud" | "openrouter";
 
 function getBestProvider(): AIProvider {
   // If API key exists, use cloud (regardless of AI_PROVIDER setting)
@@ -176,6 +176,7 @@ function getBestProvider(): AIProvider {
 function hasProviderKey(p: AIProvider): boolean {
   if (p === "ollama") return true; // always try local
   if (p === "ollama-cloud" && process.env.AI_API_KEY) return true;
+  if (p === "openrouter") return true; // always available
   if (p === "xai" && process.env.AI_API_KEY?.startsWith("xai-")) return true;
   if (p === "groq" && process.env.AI_API_KEY && !process.env.AI_API_KEY.startsWith("xai-")) return true;
   return false;
@@ -196,6 +197,7 @@ async function callWithProvider(provider: AIProvider, apiKey: string, question: 
     together: { baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3-8b-chat-hf" },
     xai: { baseUrl: "https://api.x.ai/v1", model: "grok-3-mini" },
     "ollama-cloud": { baseUrl: "https://ollama.com/v1", model: "gpt-oss:20b" },
+    openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o" },
     ollama: { baseUrl: process.env.OLLAMA_URL || "http://localhost:11434", model: process.env.OLLAMA_MODEL || "llama3.2" },
   };
 
@@ -258,6 +260,16 @@ async function callExternalAI(question: string): Promise<string> {
       console.log("[AI] Fallback ollama-cloud succeeded!");
       return result;
     } catch (e) { console.log(`[AI] ollama-cloud failed: ${e instanceof Error ? e.message : e}`); }
+  }
+
+  // Fallback: try openrouter
+  const OR_KEY = "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";
+  if (primary !== "openrouter") {
+    try {
+      const result = await callWithProvider("openrouter", OR_KEY, question);
+      console.log("[AI] Fallback openrouter succeeded!");
+      return result;
+    } catch (e) { console.log(`[AI] openrouter failed: ${e instanceof Error ? e.message : e}`); }
   }
 
   // Fallback: try local ollama if primary wasn't ollama

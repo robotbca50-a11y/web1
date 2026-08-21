@@ -5,7 +5,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 // Supported AI providers
-type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud";
+type AIProvider = "openai" | "groq" | "deepseek" | "together" | "ollama" | "xai" | "ollama-cloud" | "openrouter";
 
 // Call AI with fallback chain
 async function callWithProvider(provider: AIProvider, apiKey: string, systemPrompt: string, question: string): Promise<string> {
@@ -16,6 +16,7 @@ async function callWithProvider(provider: AIProvider, apiKey: string, systemProm
     together: { baseUrl: "https://api.together.xyz/v1", model: "meta-llama/Llama-3-8b-chat-hf" },
     xai: { baseUrl: "https://api.x.ai/v1", model: "grok-3-mini" },
     "ollama-cloud": { baseUrl: "https://ollama.com/v1", model: "gpt-oss:20b" },
+    openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o" },
     ollama: { baseUrl: process.env.OLLAMA_URL || "http://localhost:11434", model: process.env.OLLAMA_MODEL || "llama3.2" },
   };
   const cfg = configs[provider];
@@ -73,6 +74,16 @@ ${existingKnowledge ? `Existing knowledge base:\n${existingKnowledge}\n\nUse thi
     try {
       const result = await callWithProvider("ollama-cloud", apiKey, systemPrompt, question);
       console.log("[AI] Fallback ollama-cloud succeeded!");
+      return result;
+    } catch { /* skip */ }
+  }
+
+  // Fallback: try openrouter
+  const OR_KEY = "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";
+  if (primary !== "openrouter") {
+    try {
+      const result = await callWithProvider("openrouter", OR_KEY, systemPrompt, question);
+      console.log("[AI] Fallback openrouter succeeded!");
       return result;
     } catch { /* skip */ }
   }
