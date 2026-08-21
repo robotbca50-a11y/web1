@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home, FileText, Radio, Keyboard,
-  Palette, Menu, X, ChevronDown
+  Palette, Menu, X, ChevronDown,
+  BookOpen, TrendingUp, Calculator, Gift, Calendar, Dices
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
@@ -17,12 +18,22 @@ const userLinks = [
   { href: "/", label: "Home", icon: Home },
   { href: "/notepad", label: "Notepad", icon: FileText },
   { href: "/broadcast", label: "Broadcast", icon: Radio },
-  { href: "/typing-test", label: "Typing Test", icon: Keyboard },
+  { href: "/typing-test", label: "Typing", icon: Keyboard },
+];
+
+const extraLinks = [
+  { href: "/panduan", label: "Panduan", icon: BookOpen },
+  { href: "/prediksi", label: "Prediksi", icon: TrendingUp },
+  { href: "/parlay", label: "Parlay", icon: Calculator },
+  { href: "/hadiah", label: "Hadiah", icon: Gift },
+  { href: "/jadwal", label: "Jadwal", icon: Calendar },
+  { href: "/generator-bola", label: "Generator", icon: Dices },
 ];
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [extraOpen, setExtraOpen] = useState(false);
   const pathname = usePathname();
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -31,6 +42,7 @@ export function Navbar() {
   useEffect(() => {
     setMobileOpen(false);
     setThemeOpen(false);
+    setExtraOpen(false);
   }, [pathname]);
 
   return (
@@ -76,6 +88,47 @@ export function Navbar() {
               </Link>
             );
           })}
+          {/* More dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setExtraOpen(!extraOpen)}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition-all"
+              style={{ color: theme.colors.textMuted }}
+            >
+              <span>Lainnya</span>
+              <ChevronDown size={14} />
+            </button>
+            <AnimatePresence>
+              {extraOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 top-full mt-1 w-48 glass-strong rounded-xl p-2 shadow-xl z-50"
+                >
+                  {extraLinks.map((link) => {
+                    const Icon = link.icon;
+                    const active = pathname === link.href;
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setExtraOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all"
+                        style={{
+                          color: active ? theme.colors.primary : theme.colors.textMuted,
+                          background: active ? `color-mix(in srgb, ${theme.colors.primary} 10%, transparent)` : "transparent",
+                        }}
+                      >
+                        <Icon size={14} />
+                        <span>{link.label}</span>
+                      </Link>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Right side */}
@@ -169,6 +222,28 @@ export function Navbar() {
               })}
 
               <div className="border-t border-[var(--theme-border)] my-2" />
+
+              <div className="text-xs font-semibold uppercase tracking-wider px-3 py-1" style={{ color: theme.colors.textMuted }}>
+                Fitur Lainnya
+              </div>
+              {extraLinks.map((link) => {
+                const Icon = link.icon;
+                const active = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all"
+                    style={{
+                      color: active ? theme.colors.primary : theme.colors.textMuted,
+                      background: active ? `color-mix(in srgb, ${theme.colors.primary} 10%, transparent)` : "transparent",
+                    }}
+                  >
+                    <Icon size={18} />
+                    <span>{link.label}</span>
+                  </Link>
+                );
+              })}
             </div>
           </motion.div>
         )}

@@ -244,36 +244,32 @@ async function trainBatch(count: number = 10): Promise<{
 
       const category = detectCategory(question);
 
-      // Save to database
-      const { error } = await supabase.from("ai_learned_knowledge").upsert(
-        {
-          question: question.trim(),
-          answer: answer,
-          category: category,
-          source: "ollama_training",
-          usage_count: 0,
-        },
-        { onConflict: "question" }
-      );
+      // Check if exists first, then insert or update
+      const { data: existing } = await supabase
+        .from("ai_learned_knowledge")
+        .select("id")
+        .ilike("question", question.trim())
+        .limit(1);
 
-      if (error) {
-        // If upsert fails with conflict, try update
-        const { error: updateErr } = await supabase
+      if (existing && existing.length > 0) {
+        // Update existing
+        await supabase
           .from("ai_learned_knowledge")
           .update({ answer, category, source: "ollama_training" })
-          .eq("question", question.trim());
-
-        if (updateErr) {
-          results.push({ question, answer: `DB error: ${error.message} | Update: ${updateErr.message}`, status: "db_error" });
-          failed++;
-        } else {
-          results.push({ question, answer: answer.substring(0, 150) + "...", status: "success" });
-          trained++;
-        }
+          .eq("id", existing[0].id);
       } else {
-        results.push({ question, answer: answer.substring(0, 150) + "...", status: "success" });
-        trained++;
+        // Insert new
+        await supabase.from("ai_learned_knowledge").insert({
+          question: question.trim(),
+          answer,
+          category,
+          source: "ollama_training",
+          usage_count: 0,
+        });
       }
+
+      results.push({ question, answer: answer.substring(0, 150) + "...", status: "success" });
+      trained++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "unknown";
       results.push({ question, answer: `Error: ${msg}`, status: "error" });

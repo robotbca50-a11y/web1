@@ -200,20 +200,35 @@ export default function TypingTestPage() {
 
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
-      // Move to next word
+      const currentWord = words[currentWordIdx];
+      if (!currentWord) return;
+
+      const newTyped = typedInput + " ";
+      const isCorrect = currentWord.word.startsWith(newTyped.trim());
+      setTypedInput(newTyped);
+      setTotalTyped((prev) => prev + 1);
+      if (isCorrect) {
+        setCorrectChars((prev) => prev + 1);
+      } else {
+        setIncorrectChars((prev) => prev + 1);
+      }
+
+      // Show space briefly then advance
+      setWords((prev) =>
+        prev.map((w, i) => {
+          if (i === currentWordIdx) {
+            const finalTyped = w.typed || typedInput;
+            const wordCorrect = finalTyped === w.word;
+            return { ...w, typed: finalTyped, status: wordCorrect ? "correct" : "incorrect" };
+          }
+          if (i === currentWordIdx + 1) {
+            return { ...w, status: "current" };
+          }
+          return w;
+        })
+      );
+
       if (currentWordIdx < words.length - 1) {
-        setWords((prev) =>
-          prev.map((w, i) => {
-            if (i === currentWordIdx) {
-              const isCorrect = w.typed === w.word;
-              return { ...w, status: isCorrect ? "correct" : "incorrect" };
-            }
-            if (i === currentWordIdx + 1) {
-              return { ...w, status: "current" };
-            }
-            return w;
-          })
-        );
         setCurrentWordIdx((prev) => prev + 1);
         setCurrentCharIdx(0);
         setTypedInput("");

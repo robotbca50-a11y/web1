@@ -360,18 +360,32 @@ export async function POST(req: NextRequest) {
 
         const category = detectCategory(question);
 
-        const { error } = await supabase.from("ai_learned_knowledge").insert({
-          question: question,
-          answer: answer,
-          category: category,
-          source: "daily_training",
-          usage_count: 0,
-        });
+        const { data: existingRow } = await supabase
+          .from("ai_learned_knowledge")
+          .select("id")
+          .ilike("question", question)
+          .limit(1);
 
-        if (error) {
-          results.push({ question, answer: error.message, status: "db_error", category });
-        } else {
+        if (existingRow && existingRow.length > 0) {
+          await supabase
+            .from("ai_learned_knowledge")
+            .update({ answer, category, source: "daily_training" })
+            .eq("id", existingRow[0].id);
           results.push({ question, answer: answer.substring(0, 200) + "...", status: "success", category });
+        } else {
+          const { error } = await supabase.from("ai_learned_knowledge").insert({
+            question: question,
+            answer: answer,
+            category: category,
+            source: "daily_training",
+            usage_count: 0,
+          });
+
+          if (error) {
+            results.push({ question, answer: error.message, status: "db_error", category });
+          } else {
+            results.push({ question, answer: answer.substring(0, 200) + "...", status: "success", category });
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "unknown";

@@ -12,15 +12,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    const visited = sessionStorage.getItem("webutama-loaded");
-    if (visited) {
-      setLoading(false);
-    }
   }, []);
 
   const handleLoadingComplete = () => {
     setLoading(false);
-    sessionStorage.setItem("webutama-loaded", "true");
   };
 
   if (!mounted) {
