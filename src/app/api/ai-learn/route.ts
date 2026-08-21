@@ -79,8 +79,8 @@ ${existingKnowledge ? `Existing knowledge base:\n${existingKnowledge}\n\nUse thi
   }
 
   // Fallback: try openrouter
-  const OR_KEY = "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";
-  if (primary !== "openrouter") {
+  const OR_KEY = process.env.OPENROUTER_API_KEY || "";
+  if (OR_KEY && primary !== "openrouter") {
     try {
       const result = await callWithProvider("openrouter", OR_KEY, systemPrompt, question);
       console.log("[AI] Fallback openrouter succeeded!");
