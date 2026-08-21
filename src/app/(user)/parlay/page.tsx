@@ -2,219 +2,75 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Calculator, Plus, Trash2, Zap } from "lucide-react";
+import { Calculator, Plus, Trash2, Info, Zap } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
 
-interface ParlayPick {
+interface ParlayRow {
   id: number;
-  match: string;
-  pick: string;
   odds: number;
-  selected: boolean;
+  hasil: number;
 }
 
-interface MatchOption {
-  match: string;
-  league: string;
-  options: { pick: string; odds: number }[];
-}
-
-const SAMPLE_MATCHES: MatchOption[] = [
-  {
-    match: "Manchester City vs Arsenal",
-    league: "Premier League",
-    options: [
-      { pick: "Home Win", odds: 1.85 },
-      { pick: "Draw", odds: 3.6 },
-      { pick: "Away Win", odds: 4.1 },
-      { pick: "Over 2.5", odds: 1.72 },
-      { pick: "Under 2.5", odds: 2.05 },
-      { pick: "BTTS Yes", odds: 1.66 },
-      { pick: "BTTS No", odds: 2.1 },
-    ],
-  },
-  {
-    match: "Real Madrid vs Sevilla",
-    league: "La Liga",
-    options: [
-      { pick: "Home Win", odds: 1.45 },
-      { pick: "Draw", odds: 4.5 },
-      { pick: "Away Win", odds: 6.75 },
-      { pick: "Over 2.5", odds: 1.8 },
-      { pick: "Under 2.5", odds: 1.95 },
-      { pick: "BTTS Yes", odds: 1.9 },
-      { pick: "BTTS No", odds: 1.85 },
-    ],
-  },
-  {
-    match: "Inter Milan vs Juventus",
-    league: "Serie A",
-    options: [
-      { pick: "Home Win", odds: 2.1 },
-      { pick: "Draw", odds: 3.25 },
-      { pick: "Away Win", odds: 3.4 },
-      { pick: "Over 2.5", odds: 2.15 },
-      { pick: "Under 2.5", odds: 1.65 },
-      { pick: "BTTS Yes", odds: 1.95 },
-      { pick: "BTTS No", odds: 1.8 },
-    ],
-  },
-  {
-    match: "Bayern Munich vs Borussia Dortmund",
-    league: "Bundesliga",
-    options: [
-      { pick: "Home Win", odds: 1.7 },
-      { pick: "Draw", odds: 4.0 },
-      { pick: "Away Win", odds: 4.25 },
-      { pick: "Over 2.5", odds: 1.5 },
-      { pick: "Under 2.5", odds: 2.45 },
-      { pick: "BTTS Yes", odds: 1.55 },
-      { pick: "BTTS No", odds: 2.3 },
-    ],
-  },
-  {
-    match: "Olympique Lyon vs Paris Saint-Germain",
-    league: "Ligue 1",
-    options: [
-      { pick: "Home Win", odds: 4.8 },
-      { pick: "Draw", odds: 3.9 },
-      { pick: "Away Win", odds: 1.62 },
-      { pick: "Over 2.5", odds: 1.75 },
-      { pick: "Under 2.5", odds: 2.0 },
-      { pick: "BTTS Yes", odds: 1.7 },
-      { pick: "BTTS No", odds: 2.05 },
-    ],
-  },
-  {
-    match: "Liverpool vs Chelsea",
-    league: "Premier League",
-    options: [
-      { pick: "Home Win", odds: 1.95 },
-      { pick: "Draw", odds: 3.55 },
-      { pick: "Away Win", odds: 3.7 },
-      { pick: "Over 2.5", odds: 1.68 },
-      { pick: "Under 2.5", odds: 2.1 },
-      { pick: "BTTS Yes", odds: 1.6 },
-      { pick: "BTTS No", odds: 2.2 },
-    ],
-  },
-  {
-    match: "Barcelona vs Atletico Madrid",
-    league: "La Liga",
-    options: [
-      { pick: "Home Win", odds: 1.78 },
-      { pick: "Draw", odds: 3.7 },
-      { pick: "Away Win", odds: 4.3 },
-      { pick: "Over 2.5", odds: 1.85 },
-      { pick: "Under 2.5", odds: 1.9 },
-      { pick: "BTTS Yes", odds: 1.75 },
-      { pick: "BTTS No", odds: 2.0 },
-    ],
-  },
-  {
-    match: "AC Milan vs Napoli",
-    league: "Serie A",
-    options: [
-      { pick: "Home Win", odds: 2.35 },
-      { pick: "Draw", odds: 3.2 },
-      { pick: "Away Win", odds: 2.95 },
-      { pick: "Over 2.5", odds: 2.05 },
-      { pick: "Under 2.5", odds: 1.72 },
-      { pick: "BTTS Yes", odds: 1.88 },
-      { pick: "BTTS No", odds: 1.86 },
-    ],
-  },
-  {
-    match: "Persija Jakarta vs Persib Bandung",
-    league: "Liga Indonesia",
-    options: [
-      { pick: "Home Win", odds: 2.55 },
-      { pick: "Draw", odds: 3.05 },
-      { pick: "Away Win", odds: 2.8 },
-      { pick: "Over 2.5", odds: 2.2 },
-      { pick: "Under 2.5", odds: 1.62 },
-      { pick: "BTTS Yes", odds: 2.0 },
-      { pick: "BTTS No", odds: 1.75 },
-    ],
-  },
-  {
-    match: "Ajax Amsterdam vs PSV Eindhoven",
-    league: "Eredivisie",
-    options: [
-      { pick: "Home Win", odds: 2.25 },
-      { pick: "Draw", odds: 3.65 },
-      { pick: "Away Win", odds: 2.85 },
-      { pick: "Over 2.5", odds: 1.58 },
-      { pick: "Under 2.5", odds: 2.3 },
-      { pick: "BTTS Yes", odds: 1.62 },
-      { pick: "BTTS No", odds: 2.18 },
-    ],
-  },
+const RESULT_OPTIONS: { label: string; value: number }[] = [
+  { label: "Menang Full", value: 1 },
+  { label: "Menang \u00bd", value: 0.5 },
+  { label: "Kalah \u00bd", value: -0.5 },
+  { label: "Seri", value: 0 },
 ];
 
-function buildPicks(): ParlayPick[] {
-  const picks: ParlayPick[] = [];
-  let id = 1;
-  SAMPLE_MATCHES.forEach((m) => {
-    m.options.forEach((opt) => {
-      picks.push({
-        id: id++,
-        match: m.match,
-        pick: opt.pick,
-        odds: opt.odds,
-        selected: false,
-      });
-    });
-  });
-  return picks;
+function calcOx(odds: number, hasil: number): number {
+  if (hasil === 1) return odds;
+  if (hasil === 0.5) return ((odds - 1) / 2) + 1;
+  if (hasil === -0.5) return 0.5;
+  return 1;
+}
+
+function createRow(id: number): ParlayRow {
+  return { id, odds: 1.5, hasil: 1 };
 }
 
 export default function ParlayPage() {
-  const [picks, setPicks] = useState<ParlayPick[]>(buildPicks);
-  const [betAmount, setBetAmount] = useState<number>(10000);
-  const [result, setResult] = useState<{
-    totalOdds: number;
-    potentialReturn: number;
-    profit: number;
-  } | null>(null);
-
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
   const colors = theme.colors;
 
-  const selectedPicks = picks.filter((p) => p.selected);
+  const [rows, setRows] = useState<ParlayRow[]>([
+    createRow(1),
+    createRow(2),
+    createRow(3),
+  ]);
+  const [nextId, setNextId] = useState(4);
+  const [betAmount, setBetAmount] = useState<number>(100000);
+  const [showCatatan, setShowCatatan] = useState(false);
+  const [showRumus, setShowRumus] = useState(false);
 
-  const togglePick = (id: number) => {
-    setPicks((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, selected: !p.selected } : p))
-    );
-    setResult(null);
+  const updateRow = (id: number, patch: Partial<ParlayRow>) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
-  const clearAll = () => {
-    setPicks((prev) => prev.map((p) => ({ ...p, selected: false })));
-    setResult(null);
+  const addRow = () => {
+    setRows((prev) => [...prev, createRow(nextId)]);
+    setNextId((n) => n + 1);
   };
 
-  const calculate = () => {
-    if (selectedPicks.length < 2) return;
-    const totalOdds = selectedPicks.reduce((acc, p) => acc * p.odds, 1);
-    const stake = betAmount > 0 ? betAmount : 0;
-    const potentialReturn = totalOdds * stake;
-    setResult({
-      totalOdds,
-      potentialReturn,
-      profit: potentialReturn - stake,
-    });
+  const removeRow = (id: number) => {
+    setRows((prev) => prev.filter((r) => r.id !== id));
   };
+
+  const totalOdds = rows.reduce(
+    (acc, r) => acc * calcOx(r.odds || 0, r.hasil),
+    1
+  );
+  const stake = betAmount > 0 ? betAmount : 0;
+  const hasilKemenangan = stake * totalOdds - stake;
 
   return (
     <div
       className="min-h-screen px-4 py-8 md:px-8"
       style={{ backgroundColor: colors.background }}
     >
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-3xl">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -16 }}
@@ -231,7 +87,7 @@ export default function ParlayPage() {
             }}
           >
             <Calculator className="h-4 w-4" />
-            Hitung Kemenangan Parlay Kamu
+            Kalkulator Parlay
           </div>
           <h1
             className="text-3xl font-bold tracking-tight md:text-4xl"
@@ -240,28 +96,28 @@ export default function ParlayPage() {
             Parlay Calculator
           </h1>
           <p className="mt-2 text-sm md:text-base" style={{ color: colors.textMuted }}>
-            Pilih beberapa pick dari pertandingan di bawah, lalu hitung potensi kemenanganmu
+            Masukkan odds dan hasil tiap partai untuk menghitung total odds &amp; kemenanganmu
           </p>
         </motion.div>
 
-        {/* Your Parlay */}
+        {/* Rows Card */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-8 rounded-xl border p-5"
+          className="mb-6 rounded-xl border p-5"
           style={{
             backgroundColor: colors.surface,
-            borderColor: selectedPicks.length > 0 ? colors.primary : colors.border,
+            borderColor: colors.border,
           }}
         >
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-4 flex items-center justify-between">
             <h2
               className="flex items-center gap-2 text-lg font-bold"
               style={{ color: colors.text }}
             >
               <Zap className="h-5 w-5" style={{ color: colors.primary }} />
-              Your Parlay
+              Daftar Partai
               <span
                 className="rounded-full px-2 py-0.5 text-xs font-semibold"
                 style={{
@@ -269,235 +125,288 @@ export default function ParlayPage() {
                   color: colors.background,
                 }}
               >
-                {selectedPicks.length} pick
+                {rows.length}
               </span>
             </h2>
-            <button
-              onClick={clearAll}
-              disabled={selectedPicks.length === 0}
-              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
-              style={{
-                borderColor: colors.border,
-                color: colors.accent,
-                backgroundColor: colors.background,
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-              Clear All
-            </button>
           </div>
 
-          {selectedPicks.length === 0 ? (
-            <p className="py-4 text-center text-sm" style={{ color: colors.textMuted }}>
-              Belum ada pick dipilih. Klik kartu di bawah untuk menambahkan.
-            </p>
-          ) : (
-            <div className="grid gap-2">
-              {selectedPicks.map((pick, index) => (
-                <motion.div
-                  key={pick.id}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.25, delay: index * 0.04 }}
-                  className="flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
-                  style={{
-                    borderColor: colors.border,
-                    backgroundColor: colors.background,
-                  }}
-                >
-                  <div className="min-w-0">
-                    <p
-                      className="truncate text-sm font-semibold"
-                      style={{ color: colors.text }}
-                    >
-                      {pick.match}
-                    </p>
-                    <p className="text-xs" style={{ color: colors.textMuted }}>
-                      {pick.pick}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
+          <div className="grid gap-3">
+            {rows.map((row, index) => (
+              <motion.div
+                key={row.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+                className="rounded-lg border p-3"
+                style={{
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                }}
+              >
+                <div className="mb-2 flex items-center justify-between">
+                  <span
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: colors.textMuted }}
+                  >
+                    Partai {index + 1}
+                  </span>
+                  <button
+                    onClick={() => removeRow(row.id)}
+                    className="rounded-md p-1.5 transition-all hover:scale-110 hover:opacity-70"
+                    style={{
+                      border: "1px solid " + colors.border,
+                      color: colors.accent,
+                    }}
+                    aria-label={"Hapus partai " + (index + 1)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div
+                    className="flex items-center gap-2 rounded-lg border px-3 py-2 sm:w-36"
+                    style={{
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    }}
+                  >
                     <span
+                      className="text-xs font-medium"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Odds
+                    </span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={row.odds}
+                      onChange={(e) =>
+                        updateRow(row.id, { odds: Number(e.target.value) })
+                      }
+                      className="w-full bg-transparent text-sm font-semibold outline-none"
+                      style={{ color: colors.text }}
+                      placeholder="1.50"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    {RESULT_OPTIONS.map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex cursor-pointer items-center gap-1.5 text-xs font-medium transition-opacity hover:opacity-80"
+                        style={{ color: colors.text }}
+                      >
+                        <input
+                          type="radio"
+                          name={"hasil-" + row.id}
+                          checked={row.hasil === opt.value}
+                          onChange={() => updateRow(row.id, { hasil: opt.value })}
+                          style={{ accentColor: colors.primary }}
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="sm:ml-auto sm:text-right">
+                    <p
+                      className="text-[11px] uppercase tracking-wide"
+                      style={{ color: colors.textMuted }}
+                    >
+                      Odds Efektif
+                    </p>
+                    <p
                       className="text-sm font-bold"
                       style={{ color: colors.secondary }}
                     >
-                      {pick.odds.toFixed(2)}
-                    </span>
-                    <button
-                      onClick={() => togglePick(pick.id)}
-                      className="rounded-md p-1.5 transition-colors hover:opacity-70"
-                      style={{
-                        border: "1px solid " + colors.border,
-                        color: colors.accent,
-                      }}
-                      aria-label={"Remove " + pick.pick}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                      {calcOx(row.odds || 0, row.hasil).toFixed(2)}
+                    </p>
                   </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {/* Bet amount + Calculate */}
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <div className="flex flex-1 items-center gap-2 rounded-lg border px-3 py-2"
-              style={{
-                borderColor: colors.border,
-                backgroundColor: colors.background,
-              }}
-            >
-              <span className="text-sm font-medium" style={{ color: colors.textMuted }}>
-                Rp
-              </span>
-              <input
-                type="number"
-                min={0}
-                value={betAmount}
-                onChange={(e) => {
-                  setBetAmount(Number(e.target.value));
-                  setResult(null);
-                }}
-                className="w-full bg-transparent text-sm font-semibold outline-none"
-                style={{ color: colors.text }}
-                placeholder="Masukkan jumlah taruhan"
-              />
-            </div>
-            <button
-              onClick={calculate}
-              disabled={selectedPicks.length < 2}
-              className="flex items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm font-bold transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
-              style={{
-                backgroundColor: colors.primary,
-                color: colors.background,
-              }}
-            >
-              <Calculator className="h-4 w-4" />
-              Calculate
-            </button>
+                </div>
+              </motion.div>
+            ))}
           </div>
 
-          {/* Result */}
-          {result && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
-              className="mt-5 rounded-lg border p-4"
-              style={{
-                borderColor: colors.primary,
-                backgroundColor: colors.background,
-              }}
-            >
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="text-center">
-                  <p className="text-xs uppercase tracking-wide" style={{ color: colors.textMuted }}>
-                    Total Odds
-                  </p>
-                  <p className="text-xl font-bold" style={{ color: colors.secondary }}>
-                    {result.totalOdds.toFixed(2)}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs uppercase tracking-wide" style={{ color: colors.textMuted }}>
-                    Potensi Kemenangan
-                  </p>
-                  <p className="text-xl font-bold" style={{ color: colors.primary }}>
-                    {"Rp " + Math.round(result.potentialReturn).toLocaleString("id-ID")}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs uppercase tracking-wide" style={{ color: colors.textMuted }}>
-                    Keuntungan Bersih
-                  </p>
-                  <p className="text-xl font-bold" style={{ color: colors.accent }}>
-                    {"Rp " + Math.round(result.profit).toLocaleString("id-ID")}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-3 text-center text-xs" style={{ color: colors.textMuted }}>
-                {"Dari taruhan Rp " +
-                  Math.round(betAmount > 0 ? betAmount : 0).toLocaleString("id-ID") +
-                  " untuk " +
-                  selectedPicks.length +
-                  " pick"}
+          <button
+            onClick={addRow}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-2.5 text-sm font-semibold transition-all hover:scale-[1.02]"
+            style={{
+              borderColor: colors.border,
+              color: colors.primary,
+              backgroundColor: colors.background,
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Tambah Partai
+          </button>
+        </motion.div>
+
+        {/* Bet Amount */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          className="mb-6 rounded-xl border p-5"
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          }}
+        >
+          <label
+            className="mb-2 block text-sm font-semibold"
+            style={{ color: colors.text }}
+          >
+            Jumlah Taruhan (Rp)
+          </label>
+          <div
+            className="flex items-center gap-2 rounded-lg border px-3 py-2.5"
+            style={{
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+            }}
+          >
+            <span className="text-sm font-medium" style={{ color: colors.textMuted }}>
+              Rp
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={betAmount}
+              onChange={(e) => setBetAmount(Number(e.target.value))}
+              className="w-full bg-transparent text-sm font-semibold outline-none"
+              style={{ color: colors.text }}
+              placeholder="Masukkan jumlah taruhan"
+            />
+          </div>
+        </motion.div>
+
+        {/* Result */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="mb-6 rounded-xl border p-5"
+          style={{
+            borderColor: colors.primary,
+            backgroundColor: colors.surface,
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="text-center">
+              <p
+                className="text-xs uppercase tracking-wide"
+                style={{ color: colors.textMuted }}
+              >
+                Total Odds
               </p>
-            </motion.div>
+              <p className="text-2xl font-bold" style={{ color: colors.secondary }}>
+                {totalOdds.toFixed(2)}
+              </p>
+            </div>
+            <div className="text-center">
+              <p
+                className="text-xs uppercase tracking-wide"
+                style={{ color: colors.textMuted }}
+              >
+                Hasil Kemenangan
+              </p>
+              <p className="text-2xl font-bold" style={{ color: colors.primary }}>
+                {"Rp " + Math.round(hasilKemenangan).toLocaleString("id-ID")}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Catatan */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.25 }}
+          className="mb-4 overflow-hidden rounded-xl border"
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          }}
+        >
+          <button
+            onClick={() => setShowCatatan((v) => !v)}
+            className="flex w-full items-center justify-between px-5 py-3.5 text-left transition-opacity hover:opacity-80"
+          >
+            <span
+              className="flex items-center gap-2 text-sm font-bold"
+              style={{ color: colors.text }}
+            >
+              <Info className="h-4 w-4" style={{ color: colors.primary }} />
+              Catatan
+            </span>
+            <span
+              className="text-xs font-semibold"
+              style={{ color: colors.textMuted }}
+            >
+              {showCatatan ? "\u25B2" : "\u25BC"}
+            </span>
+          </button>
+          {showCatatan && (
+            <div
+              className="border-t px-5 py-4 text-sm leading-relaxed"
+              style={{ borderColor: colors.border, color: colors.textMuted }}
+            >
+              <ul className="list-disc space-y-1.5 pl-5">
+                <li>Menang Full: pick menang penuh, odds dihitung utuh.</li>
+                <li>Menang \u00bd (half win / HDP): odds dihitung setengah.</li>
+                <li>Kalah \u00bd (half lose / HDP): nilai odds menjadi 0.5.</li>
+                <li>Seri (push / void): nilai odds menjadi 1 (netral).</li>
+                <li>Total odds adalah hasil perkalian seluruh odds efektif tiap partai.</li>
+              </ul>
+            </div>
           )}
         </motion.div>
 
-        {/* Available Picks */}
-        <h2 className="mb-4 text-lg font-bold" style={{ color: colors.text }}>
-          Available Picks
-        </h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          {picks.map((pick, index) => (
-            <motion.div
-              key={pick.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.03 }}
-              className="rounded-xl border p-4 transition-all hover:shadow-md"
-              style={{
-                backgroundColor: colors.surface,
-                borderColor: pick.selected ? colors.primary : colors.border,
-                borderWidth: pick.selected ? 2 : 1,
-                opacity: pick.selected ? 1 : 0.85,
-              }}
+        {/* Rumus */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="overflow-hidden rounded-xl border"
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          }}
+        >
+          <button
+            onClick={() => setShowRumus((v) => !v)}
+            className="flex w-full items-center justify-between px-5 py-3.5 text-left transition-opacity hover:opacity-80"
+          >
+            <span
+              className="flex items-center gap-2 text-sm font-bold"
+              style={{ color: colors.text }}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p
-                    className="truncate text-sm font-semibold"
-                    style={{ color: colors.text }}
-                  >
-                    {pick.match}
-                  </p>
-                  <span
-                    className="mt-1.5 inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
-                    style={{
-                      backgroundColor: pick.selected ? colors.primary : colors.background,
-                      color: pick.selected ? colors.background : colors.textMuted,
-                      border: "1px solid " + (pick.selected ? colors.primary : colors.border),
-                    }}
-                  >
-                    {pick.pick}
-                  </span>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <span
-                    className="text-base font-bold"
-                    style={{ color: colors.secondary }}
-                  >
-                    {pick.odds.toFixed(2)}
-                  </span>
-                  <button
-                    onClick={() => togglePick(pick.id)}
-                    className="flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-all hover:scale-105"
-                    style={{
-                      borderColor: pick.selected ? colors.primary : colors.border,
-                      backgroundColor: pick.selected ? colors.primary : colors.background,
-                      color: pick.selected ? colors.background : colors.text,
-                    }}
-                  >
-                    {pick.selected ? (
-                      <>
-                        <Trash2 className="h-3 w-3" />
-                        Remove
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-3 w-3" />
-                        Pick
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+              <Calculator className="h-4 w-4" style={{ color: colors.primary }} />
+              Rumus
+            </span>
+            <span
+              className="text-xs font-semibold"
+              style={{ color: colors.textMuted }}
+            >
+              {showRumus ? "\u25B2" : "\u25BC"}
+            </span>
+          </button>
+          {showRumus && (
+            <div
+              className="space-y-2 border-t px-5 py-4 font-mono text-xs leading-relaxed"
+              style={{ borderColor: colors.border, color: colors.textMuted }}
+            >
+              <p>Menang Full : ox = odds</p>
+              <p>Menang \u00bd : ox = ((odds - 1) / 2) + 1</p>
+              <p>Kalah \u00bd : ox = 0.5</p>
+              <p>Seri : ox = 1</p>
+              <p>Total Odds = ox\u2081 \u00D7 ox\u2082 \u00D7 ... \u00D7 ox\u2099</p>
+              <p>Hasil Kemenangan = (bet \u00D7 Total Odds) - bet</p>
+            </div>
+          )}
+        </motion.div>
       </div>
     </div>
   );

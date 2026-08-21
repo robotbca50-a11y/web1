@@ -256,29 +256,7 @@ export default function TypingTestPage() {
         setIncorrectChars((prev) => prev + 1);
       }
 
-      // Check if word is complete
-      if (newTyped.length >= currentWord.word.length) {
-        setTimeout(() => {
-          if (currentWordIdx < words.length - 1) {
-            setWords((prev) =>
-              prev.map((w, i) => {
-                if (i === currentWordIdx) {
-                  return { ...w, typed: newTyped, status: newTyped === w.word ? "correct" : "incorrect" };
-                }
-                if (i === currentWordIdx + 1) {
-                  return { ...w, status: "current" };
-                }
-                return w;
-              })
-            );
-            setCurrentWordIdx((prev) => prev + 1);
-            setCurrentCharIdx(0);
-            setTypedInput("");
-          } else {
-            finishTest();
-          }
-        }, 0);
-      }
+
     }
   };
 

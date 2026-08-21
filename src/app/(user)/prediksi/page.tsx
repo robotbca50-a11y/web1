@@ -1,331 +1,239 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { TrendingUp, Clock, Target } from "lucide-react";
+import { useState, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Target, Clock, Copy, Sparkles, Download } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
 
-interface Match {
-  id: number;
-  homeTeam: string;
-  awayTeam: string;
-  league: string;
-  date: string;
-  time: string;
-  homeForm: string[];
-  awayForm: string[];
-  prediction: string;
-  confidence: number;
-  odds: {
-    home: number;
-    draw: number;
-    away: number;
-  };
+const MARKETS = [
+  "HOKI DRAW",
+  "TOTO MACAU PAGI",
+  "TOTO MACAU SIANG",
+  "TOTO MACAU SORE",
+  "TOTO MACAU MALAM I",
+  "TOTO MACAU MALAM II",
+  "TOTO MACAU MALAM III",
+  "KENTUCKY MID",
+  "KENTUCKY EVE",
+  "FLORIDA MID",
+  "FLORIDA EVE",
+  "HUAHIN 0100",
+  "HUAHIN 1630",
+  "HUAHIN 2100",
+  "BANGKOK 0130",
+  "BANGKOK 0930",
+  "NEW YORK MID",
+  "NEW YORK EVE",
+  "CAROLINA DAY",
+  "CAROLINA EVE",
+  "BRUNEI 02",
+  "BRUNEI 14",
+  "BRUNEI 21",
+  "OREGON",
+  "BULLSEYE",
+  "TOTOCAMBODIA",
+  "SYDNEY",
+  "CALIFORNIA",
+  "PCSO",
+  "POIPET",
+  "KING KONG4D I",
+  "KING KONG4D II",
+  "SINGAPORE",
+  "MAGNUM4D",
+  "TOTOMALI",
+  "BANGKOK 0930",
+  "NEVADA",
+  "HONGKONG",
+];
+
+const LOGO_MAP: Record<string, string> = {
+  HOKIDRAW: "https://cdn.areabermain.club/assets/cdn/az4/2024/12/25/20241225/1de5162dbfea7a85f41b654a2c3a4d07/logo-1.png",
+  TOTOMACAU: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/033094b5e73f842fcbcc3b235c029e7c/macau-logo.png",
+  KENTUCKY: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/ae8e720c8b7d930856cf3f364cc10158/kentucky-eve.png",
+  FLORIDA: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/801479ca02e15020fac8df0024814152/florida-eve-new-2.png",
+  HUAHIN: "https://huahinlottery.com/assets/img/logo.png",
+  BANGKOK: "https://bangkokpoolstoday.com/assets/img/bangkokpools_logo.png",
+  NEWYORK: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/1f9a654060201e07442bc78def1bc135/new-york-eve.png",
+  CAROLINA: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/816329e82e136b1e9faad6d14c8c81bc/carolina-day-pools-jpg.png",
+  BRUNEI: "https://bruneipools.com/assets/img/brunei-logo.png",
+  OREGON: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/7715823646164db9d67d280a402dfb51/oregon-jpg.png",
+  CALIFORNIA: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/c89c3a35f7323e90e2e2c5c255bdb7ae/california-pools-jpg.png",
+  TOTOCAMBODIA: "https://totocambodialive.com/assets/img/logo.png",
+  CHELSEA: "https://chelseapools.co.uk/assets/img/chelseaPools_logo.png",
+  POIPET: "https://poipetlottery.com/img/logo.png",
+  BULLSEYE: "https://cdn.areabermain.club/assets/cdn/az4/2024/08/11/20240811/f07d4e2a6517ef1cea9e2a897e4abb98/nz-bullseye.png",
+  SYDNEY: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/1d9ba1f974240b7b5c5e48fa2ef98e0e/sydney-2.png",
+  TOTOMALI: "https://totomali.com/assets/img/logo.svg",
+  KINGKONG: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/32f87d6c932b0d2eee9b6e1c9028ab41/logo-2.png",
+  SINGAPORE: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/ae20d56fcb2d0dea6b0ae637c6bed566/singapore-new.png",
+  MAGNUM4D: "https://cdn.areabermain.club/assets/cdn/az4/2024/08/11/20240811/8889f1c5fc738b5148145100c08a0ebc/439-4390693-magnum-pengeluaran-magnum-4d-hari-clipart-removebg-preview.png",
+  PCSO: "https://cdn.areabermain.club/assets/cdn/az4/2025/08/18/20250818/a67d9fd134f7211cbe08bd89bd64f79d/pcso-2.png",
+  NEVADA: "https://www.nevadalottery.us/images/logo.gif",
+  HONGKONG: "https://cdn.animaapp.com/projects/66be29ddeca4d2e95aa7b4ce/releases/66be3e204d8f7eb28bb5de15/img/hongkong-lotto-1.png",
+};
+
+const SHIO = ["Tikus","Kerbau","Macan","Kelinci","Naga","Ular","Kuda","Kambing","Monyet","Ayam","Anjing","Babi"];
+
+function rand(n: number): number { return Math.floor(Math.random() * n); }
+function randDigit(): string { return String(rand(10)); }
+function randDigits(len: number): string { return Array.from({ length: len }, () => randDigit()).join(""); }
+
+function generatePrediksi(market: string) {
+  const bbfs = randDigits(7);
+  const angkaIkut = randDigits(5);
+  const d4 = Array.from({ length: 5 }, () => randDigits(4)).join(" / ");
+  const d3 = Array.from({ length: 4 }, () => randDigits(3)).join(" / ");
+  const d2 = Array.from({ length: 10 }, () => randDigits(2)).join(" / ");
+  const colokBebas = `${randDigit()} / ${randDigit()}`;
+  const colokMacau = `${randDigits(2)} / ${randDigits(2)} / ${randDigits(2)}`;
+  const twin = `${randDigit()}${randDigit()} / ${randDigit()}${randDigit()}`;
+  const shio = `${SHIO[rand(12)]} / ${SHIO[rand(12)]} / ${SHIO[rand(12)]}`;
+
+  const now = new Date();
+  const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  const tanggal = `${String(now.getDate()).padStart(2, "0")} ${months[now.getMonth()]} ${now.getFullYear()}`;
+
+  return { market, tanggal, bbfs, angkaIkut, d4, d3, d2, colokBebas, colokMacau, twin, shio };
 }
 
-const LEAGUES = [
-  "Premier League",
-  "La Liga",
-  "Serie A",
-  "Bundesliga",
-  "Ligue 1",
-  "Liga Indonesia",
-];
+function getLogo(market: string): string | null {
+  const key = market.replace(/\s+/g, "").toUpperCase();
+  for (const [k, v] of Object.entries(LOGO_MAP)) {
+    if (key.includes(k)) return v;
+  }
+  return null;
+}
 
-const SAMPLE_MATCHES: Match[] = [
-  {
-    id: 1,
-    homeTeam: "Manchester City",
-    awayTeam: "Arsenal",
-    league: "Premier League",
-    date: "Sabtu, 22 Agu",
-    time: "21:00 WIB",
-    homeForm: ["W", "W", "D", "W", "L"],
-    awayForm: ["W", "D", "W", "W", "D"],
-    prediction: "Over 2.5",
-    confidence: 78,
-    odds: { home: 1.85, draw: 3.60, away: 4.10 },
-  },
-  {
-    id: 2,
-    homeTeam: "Real Madrid",
-    awayTeam: "Sevilla",
-    league: "La Liga",
-    date: "Sabtu, 22 Agu",
-    time: "23:30 WIB",
-    homeForm: ["W", "W", "W", "D", "W"],
-    awayForm: ["L", "D", "W", "L", "D"],
-    prediction: "Home Win -1.5",
-    confidence: 72,
-    odds: { home: 1.45, draw: 4.50, away: 6.75 },
-  },
-  {
-    id: 3,
-    homeTeam: "Inter Milan",
-    awayTeam: "Juventus",
-    league: "Serie A",
-    date: "Minggu, 23 Agu",
-    time: "02:45 WIB",
-    homeForm: ["W", "D", "W", "L", "W"],
-    awayForm: ["D", "W", "D", "W", "D"],
-    prediction: "BTTS Yes",
-    confidence: 65,
-    odds: { home: 2.10, draw: 3.25, away: 3.40 },
-  },
-  {
-    id: 4,
-    homeTeam: "Bayern Munich",
-    awayTeam: "Borussia Dortmund",
-    league: "Bundesliga",
-    date: "Minggu, 23 Agu",
-    time: "23:30 WIB",
-    homeForm: ["W", "L", "W", "W", "W"],
-    awayForm: ["W", "W", "D", "L", "W"],
-    prediction: "Over 2.5",
-    confidence: 81,
-    odds: { home: 1.70, draw: 4.00, away: 4.25 },
-  },
-  {
-    id: 5,
-    homeTeam: "Olympique Lyon",
-    awayTeam: "Paris Saint-Germain",
-    league: "Ligue 1",
-    date: "Senin, 24 Agu",
-    time: "02:00 WIB",
-    homeForm: ["D", "L", "W", "D", "L"],
-    awayForm: ["W", "W", "W", "W", "D"],
-    prediction: "Away Win",
-    confidence: 69,
-    odds: { home: 4.80, draw: 3.90, away: 1.62 },
-  },
-  {
-    id: 6,
-    homeTeam: "Persija Jakarta",
-    awayTeam: "Persib Bandung",
-    league: "Liga Indonesia",
-    date: "Senin, 24 Agu",
-    time: "19:00 WIB",
-    homeForm: ["W", "D", "L", "W", "D"],
-    awayForm: ["D", "W", "D", "D", "W"],
-    prediction: "Draw",
-    confidence: 58,
-    odds: { home: 2.55, draw: 3.05, away: 2.80 },
-  },
-];
-
-function FormDot({ result }: { result: string }) {
-  const color =
-    result === "W" ? "#22c55e" : result === "D" ? "#eab308" : "#ef4444";
-  return (
-    <span
-      className="inline-block h-2 w-2 rounded-full"
-      style={{ backgroundColor: color }}
-      title={result === "W" ? "Menang" : result === "D" ? "Serim" : "Kalah"}
-    />
-  );
+interface PrediksiResult {
+  market: string;
+  tanggal: string;
+  bbfs: string;
+  angkaIkut: string;
+  d4: string;
+  d3: string;
+  d2: string;
+  colokBebas: string;
+  colokMacau: string;
+  twin: string;
+  shio: string;
 }
 
 export default function PrediksiPage() {
-  const [activeLeague, setActiveLeague] = useState<string>("Semua");
-
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
-  const colors = theme.colors;
+  const [market, setMarket] = useState(MARKETS[0]);
+  const [result, setResult] = useState<PrediksiResult | null>(null);
+  const [copying, setCopying] = useState(false);
+  const resultRef = useRef<HTMLDivElement>(null);
 
-  const filteredMatches =
-    activeLeague === "Semua"
-      ? SAMPLE_MATCHES
-      : SAMPLE_MATCHES.filter((m) => m.league === activeLeague);
+  const generate = useCallback(() => {
+    setResult(generatePrediksi(market));
+  }, [market]);
+
+  const copyAsImage = useCallback(async () => {
+    if (!resultRef.current) return;
+    setCopying(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const canvas = await html2canvas(resultRef.current, { backgroundColor: "#0d1117", useCORS: true });
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    } catch {
+      const text = resultRef.current?.innerText;
+      if (text) await navigator.clipboard.writeText(text);
+    }
+    setCopying(false);
+  }, []);
+
+  const rows = result ? [
+    { label: "Tanggal", value: result.tanggal },
+    { label: "BBFS Kuat", value: result.bbfs },
+    { label: "Angka Ikut", value: result.angkaIkut },
+    { label: "4D (BB)", value: result.d4 },
+    { label: "3D (BB)", value: result.d3 },
+    { label: "2D (BB)", value: result.d2 },
+    { label: "Colok Bebas", value: result.colokBebas },
+    { label: "Colok Macau", value: result.colokMacau },
+    { label: "Twin", value: result.twin },
+    { label: "SHIO", value: result.shio },
+  ] : [];
 
   return (
-    <div className="min-h-screen px-4 py-8 md:px-8" style={{ backgroundColor: colors.background }}>
-      <div className="mx-auto max-w-5xl">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="mb-8 text-center"
-        >
-          <div
-            className="mb-3 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium"
-            style={{
-              borderColor: colors.border,
-              backgroundColor: colors.surface,
-              color: colors.primary,
-            }}
-          >
-            <TrendingUp className="h-4 w-4" />
-            Prediksi Pertandingan
+    <div className="min-h-screen" style={{ backgroundColor: theme.colors.background }}>
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium mb-4"
+              style={{ backgroundColor: `${theme.colors.primary}22`, color: theme.colors.primary, border: `1px solid ${theme.colors.primary}44` }}>
+              <Target size={14} /> TOGEL PREDICTION
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold mb-3" style={{ color: theme.colors.text, fontFamily: "'Cinzel', serif" }}>
+              Prediksi Angka Togel
+            </h1>
+            <p style={{ color: theme.colors.textMuted }}>Generate prediksi BBFS, angka ikut, 4D/3D/2D, colok, dan shio</p>
           </div>
-          <h1
-            className="text-3xl font-bold tracking-tight md:text-4xl"
-            style={{ color: colors.text }}
-          >
-            Prediksi Bola Hari Ini
-          </h1>
-          <p className="mt-2 text-sm md:text-base" style={{ color: colors.textMuted }}>
-            Analisis form tim dan prediksi pertandingan dari liga top Eropa & Indonesia
-          </p>
-        </motion.div>
 
-        {/* League Filter */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-8 flex flex-wrap justify-center gap-2"
-        >
-          {["Semua", ...LEAGUES].map((league) => {
-            const isActive = activeLeague === league;
-            return (
-              <button
-                key={league}
-                onClick={() => setActiveLeague(league)}
-                className="rounded-full border px-4 py-2 text-sm font-medium transition-all hover:scale-105"
-                style={{
-                  borderColor: isActive ? colors.primary : colors.border,
-                  backgroundColor: isActive ? colors.primary : colors.surface,
-                  color: isActive ? colors.background : colors.text,
-                }}
-              >
-                {league}
+          <div className="rounded-xl p-6 mb-8" style={{ backgroundColor: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+            <div className="flex flex-col md:flex-row gap-4 items-end">
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-2" style={{ color: theme.colors.textMuted }}>Pilih Pasaran</label>
+                <select value={market} onChange={(e) => setMarket(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg text-sm outline-none"
+                  style={{ backgroundColor: theme.colors.background, color: theme.colors.text, border: `1px solid ${theme.colors.border}` }}>
+                  {MARKETS.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+              <button onClick={generate}
+                className="flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white transition-all hover:scale-105"
+                style={{ backgroundColor: theme.colors.primary }}>
+                <Sparkles size={16} /> Generate
               </button>
-            );
-          })}
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {result && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                <div className="flex justify-end gap-2 mb-4">
+                  <button onClick={copyAsImage} disabled={copying}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                    style={{ backgroundColor: `${theme.colors.primary}22`, color: theme.colors.primary, border: `1px solid ${theme.colors.primary}44` }}>
+                    {copying ? <Clock size={14} className="animate-spin" /> : <Download size={14} />}
+                    {copying ? "Copying..." : "Salin Gambar"}
+                  </button>
+                  <button onClick={() => { navigator.clipboard.writeText(resultRef.current?.innerText || ""); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                    style={{ backgroundColor: `${theme.colors.accent}22`, color: theme.colors.accent, border: `1px solid ${theme.colors.accent}44` }}>
+                    <Copy size={14} /> Salin Teks
+                  </button>
+                </div>
+
+                <div ref={resultRef} className="rounded-xl overflow-hidden" style={{ backgroundColor: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+                  <div className="p-6 text-center" style={{ borderBottom: `1px solid ${theme.colors.border}` }}>
+                    {getLogo(result.market) && (
+                      <img src={getLogo(result.market)!} alt={result.market} className="h-16 mx-auto mb-3 object-contain" />
+                    )}
+                    <h2 className="text-xl font-bold" style={{ color: theme.colors.text, fontFamily: "'Cinzel', serif" }}>
+                      {result.market}
+                    </h2>
+                    <p className="text-sm mt-1 flex items-center justify-center gap-1" style={{ color: theme.colors.textMuted }}>
+                      <Clock size={12} /> {result.tanggal}
+                    </p>
+                  </div>
+                  <div className="divide-y" style={{ borderColor: theme.colors.border }}>
+                    {rows.map((row, i) => (
+                      <div key={i} className="flex items-center px-6 py-3" style={i % 2 === 0 ? { backgroundColor: `${theme.colors.background}88` } : {}}>
+                        <span className="w-32 text-sm font-medium" style={{ color: theme.colors.textMuted }}>{row.label}</span>
+                        <span className="flex-1 text-sm font-mono font-bold" style={{ color: theme.colors.primary }}>{row.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
-
-        {/* Match Cards */}
-        <div className="grid gap-5">
-          {filteredMatches.map((match, index) => (
-            <motion.div
-              key={match.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: index * 0.08 }}
-              className="rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md"
-              style={{
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              }}
-            >
-              {/* Top row: league badge + datetime */}
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <span
-                  className="rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide"
-                  style={{
-                    backgroundColor: colors.primary,
-                    color: colors.background,
-                  }}
-                >
-                  {match.league}
-                </span>
-                <div
-                  className="flex items-center gap-1.5 text-xs"
-                  style={{ color: colors.textMuted }}
-                >
-                  <Clock className="h-3.5 w-3.5" />
-                  <span>{match.date}</span>
-                  <span>•</span>
-                  <span>{match.time}</span>
-                </div>
-              </div>
-
-              {/* Teams vs prediction */}
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                {/* Home team */}
-                <div className="text-right">
-                  <p className="font-semibold" style={{ color: colors.text }}>
-                    {match.homeTeam}
-                  </p>
-                  <div className="mt-1.5 flex justify-end gap-1">
-                    {match.homeForm.map((r, i) => (
-                      <FormDot key={i} result={r} />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Prediction box */}
-                <div
-                  className="flex min-w-[110px] flex-col items-center gap-1 rounded-lg border px-3 py-2"
-                  style={{
-                    borderColor: colors.border,
-                    backgroundColor: colors.background,
-                  }}
-                >
-                  <div className="flex items-center gap-1 text-xs font-medium" style={{ color: colors.primary }}>
-                    <Target className="h-3.5 w-3.5" />
-                    <span>Prediksi</span>
-                  </div>
-                  <p className="text-sm font-bold" style={{ color: colors.text }}>
-                    {match.prediction}
-                  </p>
-                  <div
-                    className="h-1 w-full overflow-hidden rounded-full"
-                    style={{ backgroundColor: colors.border }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: match.confidence + "%",
-                        backgroundColor: colors.accent,
-                      }}
-                    />
-                  </div>
-                  <span className="text-[10px]" style={{ color: colors.textMuted }}>
-                    Confidence {match.confidence}%
-                  </span>
-                </div>
-
-                {/* Away team */}
-                <div className="text-left">
-                  <p className="font-semibold" style={{ color: colors.text }}>
-                    {match.awayTeam}
-                  </p>
-                  <div className="mt-1.5 flex gap-1">
-                    {match.awayForm.map((r, i) => (
-                      <FormDot key={i} result={r} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Odds */}
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {(
-                  [
-                    { label: "Home", value: match.odds.home },
-                    { label: "Draw", value: match.odds.draw },
-                    { label: "Away", value: match.odds.away },
-                  ] as const
-                ).map((odd) => (
-                  <div
-                    key={odd.label}
-                    className="flex flex-col items-center rounded-lg border py-2"
-                    style={{
-                      borderColor: colors.border,
-                      backgroundColor: colors.background,
-                    }}
-                  >
-                    <span className="text-[11px] uppercase tracking-wide" style={{ color: colors.textMuted }}>
-                      {odd.label}
-                    </span>
-                    <span className="text-sm font-bold" style={{ color: colors.secondary }}>
-                      {odd.value.toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          ))}
-        </div>
-
-        {filteredMatches.length === 0 && (
-          <p className="py-16 text-center text-sm" style={{ color: colors.textMuted }}>
-            Tidak ada pertandingan untuk liga ini.
-          </p>
-        )}
       </div>
     </div>
   );
