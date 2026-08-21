@@ -162,7 +162,7 @@ async function callExternalAI(question: string): Promise<string> {
   const systemPrompt = "Kamu adalah AI assistant yang membantu menjawab pertanyaan dengan akurat dan lengkap. Jawab dalam bahasa yang sama dengan pertanyaan. Berikan contoh jika relevan.";
 
   const apiKey = process.env.AI_API_KEY || "";
-  const primary: AIProvider = apiKey.startsWith("xai-") ? "xai" : apiKey ? "ollama-cloud" : "ollama";
+  const primary: AIProvider = (apiKey.startsWith("xai-") ? "xai" : apiKey ? "ollama-cloud" : "ollama") as AIProvider;
 
   try {
     return await callWithProvider(primary, apiKey, systemPrompt, question);
