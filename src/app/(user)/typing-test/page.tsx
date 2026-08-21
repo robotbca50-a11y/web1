@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Keyboard, Clock, RotateCcw, Users, User, Trophy,
-  Settings, Zap, Target, Flame, Copy, Check
+  Zap, Target, Copy, Check, X, Crown, Wifi, Send
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
@@ -31,8 +31,16 @@ interface Player {
   isYou: boolean;
   finished: boolean;
   vehicleType: "car" | "moto";
-  targetWpm: number;
 }
+
+interface OnlineUser {
+  id: string;
+  name: string;
+  status: "browsing" | "in-room";
+  roomCode?: string;
+}
+
+type View = "setup" | "lobby" | "countdown" | "racing" | "finished";
 
 function generateText(difficulty: string, language: Language, wordCount: number = 50): string {
   const wordList = getWordList(difficulty, language);
@@ -43,12 +51,21 @@ function generateText(difficulty: string, language: Language, wordCount: number 
   return words.join(" ");
 }
 
-const AI_NAMES = ["SpeedDemon", "TypeKing", "BlazeFingers", "QuickType", "NightRacer", "SwiftKeys", "ThunderType", "FastHands", "ProTyper"];
-const COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#8b5cf6", "#ec4899", "#14b8a6", "#f43f5e"];
+function getPlayerId(): string {
+  if (typeof window === "undefined") return "player-" + Math.random().toString(36).substring(2, 11);
+  let id = localStorage.getItem("typing-player-id");
+  if (!id) {
+    id = "p-" + Math.random().toString(36).substring(2, 14);
+    localStorage.setItem("typing-player-id", id);
+  }
+  return id;
+}
+
+const COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#8b5cf6", "#ec4899", "#14b8a6", "#f43f5e", "#3b82f6"];
 
 function CarSVG({ color }: { color: string }) {
   return (
-    <svg width="48" height="24" viewBox="0 0 48 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="48" height="24" viewBox="0 0 48 24" fill="none">
       <rect x="4" y="8" width="40" height="12" rx="4" fill={color} />
       <rect x="10" y="2" width="20" height="10" rx="3" fill={color} opacity="0.8" />
       <rect x="12" y="4" width="7" height="6" rx="1" fill="#88ccff" opacity="0.6" />
@@ -64,7 +81,7 @@ function CarSVG({ color }: { color: string }) {
 
 function MotoSVG({ color }: { color: string }) {
   return (
-    <svg width="44" height="24" viewBox="0 0 44 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="44" height="24" viewBox="0 0 44 24" fill="none">
       <path d="M16 4 L30 4 L34 12 L12 12 Z" fill={color} />
       <rect x="10" y="10" width="24" height="4" rx="2" fill={color} opacity="0.8" />
       <rect x="28" y="6" width="4" height="6" rx="1" fill={color} opacity="0.6" />
@@ -80,14 +97,16 @@ function MotoSVG({ color }: { color: string }) {
 
 function RaceTrack({ players, theme }: { players: Player[]; theme: ReturnType<typeof getTheme> }) {
   return (
-    <div className="space-y-2 p-4 rounded-xl" style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
-      <div className="text-xs font-bold mb-3 tracking-wider" style={{ color: theme.colors.textMuted }}>RACE TRACK</div>
+    <div className="space-y-2 p-4 rounded-xl" style={{ background: theme.colors.surface, border: "1px solid " + theme.colors.border }}>
+      <div className="text-xs font-bold mb-3 tracking-wider flex items-center gap-2" style={{ color: theme.colors.textMuted }}>
+        <Wifi size={12} /> RACE TRACK ({players.length} players)
+      </div>
       {players.map((p) => (
         <div key={p.id} className="relative">
           {p.isYou && (
             <div
               className="absolute -top-6 z-10 transition-all duration-300"
-              style={{ left: `calc(${Math.min(p.progress, 92)}% + 24px)`, transform: "translateX(-50%)" }}
+              style={{ left: "calc(" + Math.min(p.progress, 92) + "% + 24px)", transform: "translateX(-50%)" }}
             >
               <div className="flex flex-col items-center">
                 <span className="text-[10px] font-black tracking-wider" style={{ color: theme.colors.primary }}>YOU</span>
@@ -96,39 +115,35 @@ function RaceTrack({ players, theme }: { players: Player[]; theme: ReturnType<ty
             </div>
           )}
           <div className="flex items-center gap-2">
-            <span
-              className="text-[11px] font-mono w-20 truncate shrink-0"
-              style={{ color: p.isYou ? theme.colors.primary : theme.colors.text }}
-            >
+            <span className="text-[11px] font-mono w-20 truncate shrink-0" style={{ color: p.isYou ? theme.colors.primary : theme.colors.text }}>
               {p.name}
             </span>
             <div className="flex-1 h-7 rounded-full relative overflow-hidden" style={{ background: theme.colors.background }}>
-              <div
-                className="absolute inset-y-0 left-0 rounded-full opacity-15 transition-all duration-200"
-                style={{ width: `${p.progress}%`, background: p.color }}
-              />
-              <div
-                className="absolute top-1/2 -translate-y-1/2 transition-all duration-200 ease-out"
-                style={{ left: `${Math.min(p.progress, 90)}%` }}
-              >
+              <div className="absolute inset-y-0 left-0 rounded-full opacity-15 transition-all duration-200" style={{ width: p.progress + "%", background: p.color }} />
+              <div className="absolute top-1/2 -translate-y-1/2 transition-all duration-200 ease-out" style={{ left: Math.min(p.progress, 90) + "%" }}>
                 {p.vehicleType === "car" ? <CarSVG color={p.color} /> : <MotoSVG color={p.color} />}
               </div>
             </div>
-            <span className="text-[11px] font-mono w-14 text-right shrink-0" style={{ color: theme.colors.textMuted }}>
+            <span className="text-[11px] font-mono w-14 text-right shrink-0" style={{ color: p.finished ? "#22c55e" : theme.colors.textMuted }}>
               {p.wpm} wpm
             </span>
+            {p.finished && <Check size={12} style={{ color: "#22c55e" }} />}
           </div>
         </div>
       ))}
     </div>
   );
 }
-
 export default function TypingTestPage() {
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [timeLimit, setTimeLimit] = useState(60);
   const [mode, setMode] = useState<"solo" | "race">("solo");
   const [language, setLanguage] = useState<Language>("en");
+  const [nickname, setNickname] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("typing-nickname") || "";
+    return "";
+  });
+  const [view, setView] = useState<View>("setup");
 
   const [text, setText] = useState("");
   const [words, setWords] = useState<WordState[]>([]);
@@ -152,134 +167,212 @@ export default function TypingTestPage() {
 
   const [countdown, setCountdown] = useState<number | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [showSettings, setShowSettings] = useState(false);
   const [leaderboard, setLeaderboard] = useState<TypingResult[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [invite, setInvite] = useState<{ hostName: string; roomCode: string } | null>(null);
+  const [connected, setConnected] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const broadcastRef = useRef<NodeJS.Timeout | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const globalChannelRef = useRef<any>(null);
+  const playerIdRef = useRef(getPlayerId());
+  const myColorRef = useRef(COLORS[0]);
+
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
-
-  const totalChars = useMemo(() => text.length, [text]);
-
   const progress = useMemo(() => {
     if (words.length === 0) return 0;
     return Math.round((currentWordIdx / words.length) * 100);
   }, [currentWordIdx, words.length]);
 
-  useEffect(() => {
-    const newText = generateText(difficulty, language);
-    setText(newText);
-    const wordList: WordState[] = newText.split(" ").map((w) => ({
-      word: w, typed: "", status: "pending",
-    }));
-    if (wordList.length > 0) wordList[0].status = "current";
-    setWords(wordList);
-    setCurrentWordIdx(0);
-  }, [difficulty, language]);
 
   useEffect(() => {
-    if (isActive && !isFinished) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            if (timerRef.current) clearInterval(timerRef.current);
-            setTimeout(() => finishTest(), 0);
-            return 0;
+    if (nickname && typeof window !== "undefined") {
+      localStorage.setItem("typing-nickname", nickname);
+    }
+  }, [nickname]);
+
+  useEffect(() => {
+    if (!nickname) return;
+    const supabase = createClient();
+    const ch = supabase.channel("typing-test-global", {
+      config: { presence: { key: playerIdRef.current } },
+    });
+    ch.on("presence", { event: "sync" }, () => {
+      const state = ch.presenceState() as Record<string, { id: string; name: string; status: string; roomCode?: string }[]>;
+      const users: OnlineUser[] = [];
+      Object.values(state).forEach((arr) => {
+        arr.forEach((u) => {
+          if (u.id !== playerIdRef.current) {
+            users.push({ id: u.id, name: u.name, status: (u.status || "browsing") as OnlineUser["status"], roomCode: u.roomCode });
           }
-          return prev - 1;
         });
-      }, 1000);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isActive, isFinished]);
-
-  useEffect(() => {
-    if (isActive && startTime) {
-      const elapsed = (Date.now() - startTime) / 1000;
-      if (elapsed > 0) {
-        const currentWpm = calculateWPM(correctChars, elapsed);
-        setWpm(currentWpm);
-        setMaxWpm((prev) => Math.max(prev, currentWpm));
+      });
+      setOnlineUsers(users);
+    });
+    ch.on("broadcast", { event: "invite" }, ({ payload }: { payload: { fromId: string; fromName: string; roomCode: string } }) => {
+      if (payload.fromId !== playerIdRef.current && view === "setup") {
+        setInvite({ hostName: payload.fromName, roomCode: payload.roomCode });
       }
-    }
-  }, [correctChars, isActive, startTime]);
+    });
+    ch.subscribe((status: string) => {
+      if (status === "SUBSCRIBED") {
+        ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", status: "browsing" });
+        setConnected(true);
+      }
+    });
+    globalChannelRef.current = ch;
+    return () => { ch.unsubscribe(); };
+  }, [nickname, view]);
 
-  useEffect(() => {
-    if (!isActive || mode !== "race") return;
-    const interval = setInterval(() => {
-      setPlayers((prev) =>
-        prev.map((p) => {
-          if (p.isYou || p.finished) return p;
-          const wpmDelta = p.targetWpm / 600;
-          const charDelta = wpmDelta * 5;
-          const newProgress = p.progress + (totalChars > 0 ? (charDelta / totalChars) * 100 : 0);
-          if (newProgress >= 100) return { ...p, progress: 100, wpm: Math.round(p.targetWpm), finished: true };
-          return { ...p, progress: Math.min(newProgress, 99), wpm: Math.round(p.targetWpm * Math.min(newProgress / 80, 1)) };
-        })
-      );
-    }, 100);
-    return () => clearInterval(interval);
-  }, [isActive, mode, totalChars]);
+  const updateGlobalPresence = useCallback((status: "browsing" | "in-room", room?: string) => {
+    const ch = globalChannelRef.current;
+    if (ch) ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", status, roomCode: room });
+  }, [nickname]);
 
-  const initRace = useCallback(() => {
-    const opponents: Player[] = AI_NAMES.map((name, i) => ({
-      id: `ai-${i}`,
-      name,
-      wpm: 0,
-      progress: 0,
-      color: COLORS[i % COLORS.length],
-      isYou: false,
-      finished: false,
-      vehicleType: (i % 2 === 0 ? "car" : "moto") as "car" | "moto",
-      targetWpm: 30 + Math.random() * 60,
-    }));
-    const you: Player = {
-      id: "you",
-      name: "You",
-      wpm: 0,
-      progress: 0,
-      color: theme.colors.primary,
-      isYou: true,
-      finished: false,
-      vehicleType: "car",
-      targetWpm: 0,
-    };
-    setPlayers([you, ...opponents]);
-  }, [theme.colors.primary]);
+  const setupRoomChannel = useCallback((code: string) => {
+    const supabase = createClient();
+    myColorRef.current = isHost ? COLORS[0] : COLORS[Math.min(players.length, COLORS.length - 1)];
+    const ch = supabase.channel("typing-room:" + code, {
+      config: { presence: { key: playerIdRef.current } },
+    });
+    ch.on("presence", { event: "sync" }, () => {
+      const state = ch.presenceState() as Record<string, { id: string; name: string; color: string; wpm: number; progress: number; finished: boolean }[]>;
+      const allPlayers: Player[] = [];
+      Object.values(state).forEach((members) => {
+        members.forEach((m) => {
+          allPlayers.push({
+            id: m.id, name: m.name, wpm: m.wpm || 0, progress: m.progress || 0,
+            color: m.color, isYou: m.id === playerIdRef.current, finished: m.finished || false,
+            vehicleType: allPlayers.length % 2 === 0 ? "car" : "moto",
+          });
+        });
+      });
+      setPlayers(allPlayers);
+    });
+    ch.on("broadcast", { event: "countdown" }, ({ payload }: { payload: { value: number } }) => {
+      setView("countdown");
+      setCountdown(payload.value);
+    });
+    ch.on("broadcast", { event: "race-start" }, ({ payload }: { payload: { startTime: number; text: string } }) => {
+      setText(payload.text);
+      const wl: WordState[] = payload.text.split(" ").map((w: string) => ({ word: w, typed: "", status: "pending" as const }));
+      if (wl.length > 0) wl[0].status = "current";
+      setWords(wl);
+      setCurrentWordIdx(0);
+      setTypedInput("");
+      setCountdown(null);
+      setView("racing");
+      setIsActive(true);
+      setStartTime(payload.startTime);
+      setTimeLeft(timeLimit);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    });
+    ch.on("broadcast", { event: "player-progress" }, ({ payload }: { payload: { id: string; name: string; wpm: number; progress: number; finished: boolean } }) => {
+      if (payload.id === playerIdRef.current) return;
+      setPlayers((prev) => {
+        const exists = prev.find((p) => p.id === payload.id);
+        if (exists) return prev.map((p) => p.id === payload.id ? { ...p, wpm: payload.wpm, progress: payload.progress, finished: payload.finished } : p);
+        return [...prev, { id: payload.id, name: payload.name, wpm: payload.wpm, progress: payload.progress, color: COLORS[prev.length % COLORS.length], isYou: false, finished: payload.finished, vehicleType: prev.length % 2 === 0 ? "car" : "moto" }];
+      });
+    });
+    ch.on("broadcast", { event: "race-finish" }, ({ payload }: { payload: { id: string; wpm: number } }) => {
+      setPlayers((prev) => prev.map((p) => p.id === payload.id ? { ...p, wpm: payload.wpm, progress: 100, finished: true } : p));
+    });
+    ch.subscribe((status: string) => {
+      if (status === "SUBSCRIBED") {
+        ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", color: myColorRef.current, wpm: 0, progress: 0, finished: false });
+      }
+    });
+    channelRef.current = ch;
+  }, [nickname, timeLimit, isHost, players.length]);
 
-  const updateYourProgress = useCallback((charIdx: number) => {
-    if (mode !== "race") return;
-    setPlayers((prev) =>
-      prev.map((p) => {
-        if (!p.isYou) return p;
-        const prog = totalChars > 0 ? (charIdx / totalChars) * 100 : 0;
-        return { ...p, progress: Math.min(prog, 99) };
-      })
-    );
-  }, [mode, totalChars]);
+  const broadcastProgress = useCallback((myWpm: number, myProgress: number) => {
+    const ch = channelRef.current;
+    if (!ch) return;
+    ch.send({ type: "broadcast", event: "player-progress", payload: { id: playerIdRef.current, name: nickname || "Anonymous", wpm: myWpm, progress: myProgress, finished: false } });
+  }, [nickname]);
+  const createRoom = async () => {
+    const code = generateRoomCode();
+    setRoomCode(code);
+    setIsHost(true);
+    myColorRef.current = COLORS[0];
+    const supabase = createClient();
+    await supabase.from("typing_rooms").insert({ room_code: code, host_nickname: nickname || "Host", status: "waiting", difficulty, text_content: "", time_limit: timeLimit, language });
+    setupRoomChannel(code);
+    updateGlobalPresence("in-room", code);
+    setView("lobby");
+  };
+
+  const joinRoomByCode = async (code: string) => {
+    const supabase = createClient();
+    const { data } = await supabase.from("typing_rooms").select("*").eq("room_code", code.toUpperCase()).eq("status", "waiting").single();
+    if (!data) { alert("Room not found or already started!"); return; }
+    setRoomCode(code.toUpperCase());
+    setIsHost(false);
+    setDifficulty(data.difficulty);
+    setTimeLimit(data.time_limit || 60);
+    if (data.language) setLanguage(data.language);
+    setupRoomChannel(code.toUpperCase());
+    updateGlobalPresence("in-room", code.toUpperCase());
+    setView("lobby");
+  };
+
+  const acceptInvite = () => {
+    if (invite) { joinRoomByCode(invite.roomCode); setInvite(null); }
+  };
+
+  const startRace = async () => {
+    const supabase = createClient();
+    const newText = generateText(difficulty, language);
+    await supabase.from("typing_rooms").update({ status: "playing", text_content: newText }).eq("room_code", roomCode);
+    let count = 3;
+    const ch = channelRef.current;
+    if (ch) ch.send({ type: "broadcast", event: "countdown", payload: { value: 3 } });
+    setView("countdown");
+    setCountdown(3);
+    const cd = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(cd);
+        setCountdown(null);
+        if (ch) ch.send({ type: "broadcast", event: "race-start", payload: { startTime: Date.now(), text: newText } });
+        setText(newText);
+        const wl: WordState[] = newText.split(" ").map((w) => ({ word: w, typed: "", status: "pending" as const }));
+        if (wl.length > 0) wl[0].status = "current";
+        setWords(wl);
+        setCurrentWordIdx(0);
+        setTypedInput("");
+        setView("racing");
+        setIsActive(true);
+        setStartTime(Date.now());
+        setTimeLeft(timeLimit);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      } else {
+        setCountdown(count);
+        if (ch) ch.send({ type: "broadcast", event: "countdown", payload: { value: count } });
+      }
+    }, 1000);
+    countdownRef.current = cd as unknown as NodeJS.Timeout;
+  };
 
   const startTest = useCallback(() => {
+    if (mode === "race") return;
     const newText = generateText(difficulty, language);
     setText(newText);
-    const wordList: WordState[] = newText.split(" ").map((w) => ({
-      word: w, typed: "", status: "pending",
-    }));
-    if (wordList.length > 0) wordList[0].status = "current";
-    setWords(wordList);
+    const wl: WordState[] = newText.split(" ").map((w) => ({ word: w, typed: "", status: "pending" }));
+    if (wl.length > 0) wl[0].status = "current";
+    setWords(wl);
     setCurrentWordIdx(0);
     setTypedInput("");
     setTimeLeft(timeLimit);
     setIsFinished(false);
-    setWpm(0);
-    setAccuracy(100);
-    setMaxWpm(0);
-    setCorrectChars(0);
-    setIncorrectChars(0);
-
-    if (mode === "race") initRace();
-
+    setWpm(0); setAccuracy(100); setMaxWpm(0); setCorrectChars(0); setIncorrectChars(0);
     setCountdown(3);
     let count = 3;
     countdownRef.current = setInterval(() => {
@@ -290,141 +383,95 @@ export default function TypingTestPage() {
         setIsActive(true);
         setStartTime(Date.now());
         setTimeout(() => inputRef.current?.focus(), 50);
-      } else {
-        setCountdown(count);
-      }
+      } else { setCountdown(count); }
     }, 1000);
-  }, [difficulty, language, timeLimit, mode, initRace]);
+  }, [difficulty, language, timeLimit, mode]);
 
   const finishTest = useCallback(() => {
     setIsActive(false);
     setIsFinished(true);
     if (timerRef.current) clearInterval(timerRef.current);
-
+    if (broadcastRef.current) clearInterval(broadcastRef.current);
     const total = correctChars + incorrectChars;
-    const finalAccuracy = total > 0 ? calculateAccuracy(correctChars, total) : 0;
-    setAccuracy(finalAccuracy);
-
-    if (mode === "race") {
-      setPlayers((prev) =>
-        prev.map((p) => {
-          if (p.isYou) return { ...p, wpm, progress: 100, finished: true };
-          return p;
-        })
-      );
+    const finalAcc = total > 0 ? calculateAccuracy(correctChars, total) : 0;
+    setAccuracy(finalAcc);
+    if (mode === "race" && roomCode) {
+      const ch = channelRef.current;
+      if (ch) ch.send({ type: "broadcast", event: "race-finish", payload: { id: playerIdRef.current, name: nickname || "Anonymous", wpm, accuracy: finalAcc } });
+      updateGlobalPresence("browsing");
     }
-
     const supabase = createClient();
-    supabase.from("typing_results").insert({
-      nickname: "Player",
-      wpm,
-      accuracy: finalAccuracy,
-      difficulty,
-      mode,
-      text_content: text.substring(0, 200),
-      max_wpm: maxWpm,
-      completed_at: new Date().toISOString(),
-    }).then(({ error }: { error: unknown }) => {
-      if (error) console.error("Failed to save typing result:", error);
-    });
-  }, [correctChars, incorrectChars, wpm, difficulty, mode, text, maxWpm]);
+    supabase.from("typing_results").insert({ nickname: nickname || "Anonymous", wpm, accuracy: finalAcc, difficulty, mode, text_content: text.substring(0, 200), max_wpm: maxWpm, completed_at: new Date().toISOString(), room_code: roomCode || null })
+      .then(({ error }: { error: unknown }) => { if (error) console.error("Save failed:", error); });
+    setView("finished");
+  }, [correctChars, incorrectChars, wpm, difficulty, mode, text, maxWpm, nickname, roomCode, updateGlobalPresence]);
+
+  useEffect(() => {
+    if (isActive && !isFinished) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) { if (timerRef.current) clearInterval(timerRef.current); setTimeout(() => finishTest(), 0); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isActive, isFinished, finishTest]);
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (isActive && startTime) {
+      const elapsed = (Date.now() - startTime) / 1000;
+      if (elapsed > 0) {
+        const curWpm = calculateWPM(correctChars, elapsed);
+        setWpm(curWpm);
+        setMaxWpm((prev) => Math.max(prev, curWpm));
+      }
+    }
+  }, [correctChars, isActive, startTime]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (isActive && !isFinished) {
+      broadcastRef.current = setInterval(() => { broadcastProgress(wpm, progress); }, 200);
+    }
+    return () => { if (broadcastRef.current) clearInterval(broadcastRef.current); };
+  }, [isActive, isFinished, wpm, progress, broadcastProgress]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isActive || isFinished) return;
-
-    if (e.key === "Tab") {
-      e.preventDefault();
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      if (timerRef.current) clearInterval(timerRef.current);
-      setCountdown(null);
-      startTest();
-      return;
-    }
-
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      if (typedInput.length > 0) {
-        setTypedInput((prev) => prev.slice(0, -1));
-      }
-      return;
-    }
-
+    if (e.key === "Tab") { e.preventDefault(); if (countdownRef.current) clearInterval(countdownRef.current); if (timerRef.current) clearInterval(timerRef.current); setCountdown(null); startTest(); return; }
+    if (e.key === "Backspace") { e.preventDefault(); if (typedInput.length > 0) setTypedInput((p) => p.slice(0, -1)); return; }
     if (e.key === " ") {
       e.preventDefault();
-      const currentWord = words[currentWordIdx];
-      if (!currentWord) return;
-
-      const finalTyped = typedInput;
-      const wordCorrect = finalTyped === currentWord.word;
-
-      setWords((prev) =>
-        prev.map((w, i) => {
-          if (i === currentWordIdx) return { ...w, typed: finalTyped, status: wordCorrect ? "correct" : "incorrect" };
-          if (i === currentWordIdx + 1) return { ...w, status: "current" };
-          return w;
-        })
-      );
-
-      if (wordCorrect) {
-        setCorrectChars((prev) => prev + currentWord.word.length);
-      } else {
-        let correct = 0;
-        for (let i = 0; i < Math.min(finalTyped.length, currentWord.word.length); i++) {
-          if (finalTyped[i] === currentWord.word[i]) correct++;
-        }
-        setCorrectChars((prev) => prev + correct);
-        setIncorrectChars((prev) => prev + Math.abs(finalTyped.length - currentWord.word.length) + (currentWord.word.length - correct));
-      }
-
-      const newTotal = currentWordIdx + 1;
-      updateYourProgress(newTotal);
-
-      if (currentWordIdx < words.length - 1) {
-        setCurrentWordIdx((prev) => prev + 1);
-        setTypedInput("");
-      } else {
-        finishTest();
-      }
+      const cw = words[currentWordIdx];
+      if (!cw) return;
+      const ft = typedInput;
+      const wc = ft === cw.word;
+      setWords((prev) => prev.map((w, i) => { if (i === currentWordIdx) return { ...w, typed: ft, status: wc ? "correct" : "incorrect" }; if (i === currentWordIdx + 1) return { ...w, status: "current" }; return w; }));
+      if (wc) { setCorrectChars((p) => p + cw.word.length); }
+      else { let c = 0; for (let i = 0; i < Math.min(ft.length, cw.word.length); i++) { if (ft[i] === cw.word[i]) c++; } setCorrectChars((p) => p + c); setIncorrectChars((p) => p + Math.abs(ft.length - cw.word.length) + (cw.word.length - c)); }
+      if (currentWordIdx < words.length - 1) { setCurrentWordIdx((p) => p + 1); setTypedInput(""); }
+      else { finishTest(); }
       return;
     }
-
-    if (e.key.length === 1) {
-      e.preventDefault();
-      const currentWord = words[currentWordIdx];
-      if (!currentWord) return;
-      setTypedInput((prev) => prev + e.key);
-    }
+    if (e.key.length === 1) { e.preventDefault(); const cw = words[currentWordIdx]; if (cw) setTypedInput((p) => p + e.key); }
   };
+  const copyCode = () => { navigator.clipboard.writeText(roomCode); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  const leaveRoom = () => { channelRef.current?.unsubscribe(); updateGlobalPresence("browsing"); setRoomCode(""); setIsHost(false); setPlayers([]); setView("setup"); };
+  const invitePlayer = () => { const ch = globalChannelRef.current; if (ch && roomCode) ch.send({ type: "broadcast", event: "invite", payload: { fromId: playerIdRef.current, fromName: nickname || "Host", roomCode } }); };
 
-  const createRoom = () => {
-    const code = generateRoomCode();
-    setRoomCode(code);
-    setIsHost(true);
-    initRace();
-  };
-
-  const joinRoom = () => {
-    if (joinCode.length === 6) {
-      setRoomCode(joinCode.toUpperCase());
-      initRace();
-    }
-  };
-
-  const copyCode = () => {
-    navigator.clipboard.writeText(roomCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const resetAll = () => {
+    setIsActive(false); setIsFinished(false);
+    setView(mode === "race" && roomCode ? "lobby" : "setup");
+    setWpm(0); setAccuracy(100); setMaxWpm(0); setCorrectChars(0); setIncorrectChars(0);
+    if (mode === "solo") { setText(""); setWords([]); setCurrentWordIdx(0); }
   };
 
   useEffect(() => {
     const loadLeaderboard = async () => {
       const supabase = createClient();
-      const { data } = await supabase
-        .from("typing_results")
-        .select("*")
-        .eq("difficulty", difficulty)
-        .order("wpm", { ascending: false })
-        .limit(10);
+      const { data } = await supabase.from("typing_results").select("*").eq("difficulty", difficulty).order("wpm", { ascending: false }).limit(10);
       if (data) setLeaderboard(data);
     };
     loadLeaderboard();
@@ -434,225 +481,277 @@ export default function TypingTestPage() {
     <div className="max-w-5xl mx-auto px-4 py-6" style={{ color: theme.colors.text }}>
       <AnimatePresence>
         {countdown !== null && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.85)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              key={countdown}
-              className="text-[120px] font-black"
-              style={{ color: theme.colors.primary, textShadow: `0 0 40px ${theme.colors.primary}60` }}
-              initial={{ scale: 3, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.3, opacity: 0 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-            >
+          <motion.div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.85)" }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div key={countdown} className="text-[120px] font-black" style={{ color: theme.colors.primary, textShadow: "0 0 40px " + theme.colors.primary + "60" }} initial={{ scale: 3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.3, opacity: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}>
               {countdown === 0 ? "GO!" : countdown}
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <motion.div
-        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Keyboard size={24} style={{ color: theme.colors.primary }} />
-          Typing Test
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowSettings(!showSettings)}>
-            <Settings size={16} /> Settings
-          </Button>
-          <Button variant="ghost" size="sm" onClick={startTest}>
-            <RotateCcw size={16} /> Restart
-          </Button>
-        </div>
-      </motion.div>
-
       <AnimatePresence>
-        {showSettings && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-6">
-            <Card variant="glass" className="p-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}>
-                    <Users size={12} className="inline mr-1" /> Mode
-                  </label>
-                  <div className="flex gap-1">
-                    {(["solo", "race"] as const).map((m) => (
-                      <button key={m} onClick={() => setMode(m)}
-                        className="flex-1 px-2 py-1.5 rounded text-xs font-medium capitalize transition-all flex items-center justify-center gap-1"
-                        style={{ background: mode === m ? theme.colors.primary : theme.colors.surface, color: mode === m ? theme.colors.background : theme.colors.textMuted }}>
-                        {m === "solo" ? <User size={12} /> : <Users size={12} />} {m}
-                      </button>
-                    ))}
-                  </div>
+        {invite && (
+          <motion.div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)" }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}>
+              <Card variant="glow" className="p-6 text-center max-w-sm">
+                <Zap size={32} className="mx-auto mb-3" style={{ color: theme.colors.primary }} />
+                <h3 className="text-lg font-bold mb-2">Race Invite!</h3>
+                <p className="text-sm mb-1" style={{ color: theme.colors.textMuted }}>
+                  <strong style={{ color: theme.colors.primary }}>{invite.hostName}</strong> mengundang kamu ke race
+                </p>
+                <code className="text-sm font-mono font-bold px-3 py-1 rounded inline-block mb-4" style={{ background: theme.colors.background, color: theme.colors.primary }}>{invite.roomCode}</code>
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={acceptInvite} glow><Check size={14} /> Join</Button>
+                  <Button variant="secondary" onClick={() => setInvite(null)}><X size={14} /> Tolak</Button>
                 </div>
-                <div>
-                  <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}>
-                    <Clock size={12} className="inline mr-1" /> Time
-                  </label>
-                  <div className="flex gap-1">
-                    {[15, 30, 60, 120].map((t) => (
-                      <button key={t} onClick={() => setTimeLimit(t)}
-                        className="flex-1 px-1 py-1.5 rounded text-xs font-medium transition-all"
-                        style={{ background: timeLimit === t ? theme.colors.primary : theme.colors.surface, color: timeLimit === t ? theme.colors.background : theme.colors.textMuted }}>
-                        {t}s
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}>
-                    <Target size={12} className="inline mr-1" /> Difficulty
-                  </label>
-                  <div className="flex gap-1">
-                    {(["easy", "medium", "hard"] as const).map((d) => (
-                      <button key={d} onClick={() => setDifficulty(d)}
-                        className="flex-1 px-2 py-1.5 rounded text-xs font-medium capitalize transition-all"
-                        style={{ background: difficulty === d ? theme.colors.primary : theme.colors.surface, color: difficulty === d ? theme.colors.background : theme.colors.textMuted }}>
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}>Language</label>
-                  <div className="flex gap-1">
-                    {([{ key: "en" as Language, label: "EN" }, { key: "id" as Language, label: "ID" }]).map((l) => (
-                      <button key={l.key} onClick={() => setLanguage(l.key)}
-                        className="flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all"
-                        style={{ background: language === l.key ? theme.colors.primary : theme.colors.surface, color: language === l.key ? theme.colors.background : theme.colors.textMuted }}>
-                        {l.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {mode === "race" && (
-                <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${theme.colors.border}` }}>
-                  <div className="flex gap-2 items-center">
-                    {roomCode ? (
-                      <>
-                        <span className="text-xs" style={{ color: theme.colors.textMuted }}>Room:</span>
-                        <code className="text-sm font-mono font-bold px-3 py-1.5 rounded" style={{ background: theme.colors.background, color: theme.colors.primary }}>{roomCode}</code>
-                        <button onClick={copyCode} className="p-1.5 rounded" style={{ background: theme.colors.surface }}>
-                          {copied ? <Check size={14} style={{ color: "#22c55e" }} /> : <Copy size={14} style={{ color: theme.colors.textMuted }} />}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <Button size="sm" onClick={createRoom}>Create Room</Button>
-                        <span className="text-xs" style={{ color: theme.colors.textMuted }}>or</span>
-                        <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="Join code"
-                          className="w-24 px-2 py-1 rounded text-xs font-mono text-center"
-                          style={{ background: theme.colors.background, color: theme.colors.text, border: `1px solid ${theme.colors.border}` }}
-                          maxLength={6} />
-                        <Button size="sm" variant="secondary" onClick={joinRoom}>Join</Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </Card>
+              </Card>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {mode === "race" && players.length > 0 && (
+      <motion.div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Keyboard size={24} style={{ color: theme.colors.primary }} />
+          Typing Test
+          {mode === "race" && roomCode && (
+            <span className="flex items-center gap-1 text-xs font-normal ml-2">
+              {connected ? <Wifi size={12} className="text-green-400" /> : <Wifi size={12} className="text-red-400" />}
+              <code className="font-mono font-bold px-2 py-0.5 rounded" style={{ background: theme.colors.surface, color: theme.colors.primary }}>{roomCode}</code>
+              {isHost && <Crown size={12} style={{ color: "#fbbf24" }} />}
+            </span>
+          )}
+        </h1>
+        <div className="flex items-center gap-2">
+          {view === "racing" && mode === "race" && <Button variant="ghost" size="sm" onClick={leaveRoom}><X size={14} /> Leave</Button>}
+          {view === "setup" && <Button variant="ghost" size="sm" onClick={startTest}><RotateCcw size={16} /> Solo</Button>}
+        </div>
+      </motion.div>
+      {/* SETUP VIEW */}
+      {view === "setup" && (
+        <div className="space-y-4">
+          {!nickname ? (
+            <Card variant="glass" className="p-6 text-center">
+              <User size={40} className="mx-auto mb-4" style={{ color: theme.colors.primary }} />
+              <h2 className="text-xl font-bold mb-2">Masukkan Nickname</h2>
+              <p className="text-sm mb-4" style={{ color: theme.colors.textMuted }}>Buat bermain solo atau race multiplayer</p>
+              <div className="flex gap-2 justify-center">
+                <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Nickname..."
+                  className="w-48 px-3 py-2 rounded-lg text-sm font-mono text-center" style={{ background: theme.colors.background, color: theme.colors.text, border: "1px solid " + theme.colors.border }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && nickname.trim()) setNickname(nickname.trim()); }} maxLength={20} />
+                <Button onClick={() => { if (nickname.trim()) setNickname(nickname.trim()); }} disabled={!nickname.trim()}>OK</Button>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <Card variant="glass" className="p-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}><Users size={12} className="inline mr-1" /> Mode</label>
+                    <div className="flex gap-1">
+                      {(["solo", "race"] as const).map((m) => (
+                        <button key={m} onClick={() => setMode(m)} className="flex-1 px-2 py-1.5 rounded text-xs font-medium capitalize transition-all flex items-center justify-center gap-1"
+                          style={{ background: mode === m ? theme.colors.primary : theme.colors.surface, color: mode === m ? theme.colors.background : theme.colors.textMuted }}>
+                          {m === "solo" ? <User size={12} /> : <Users size={12} />} {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}><Clock size={12} className="inline mr-1" /> Time</label>
+                    <div className="flex gap-1">
+                      {[15, 30, 60, 120].map((t) => (
+                        <button key={t} onClick={() => setTimeLimit(t)} className="flex-1 px-1 py-1.5 rounded text-xs font-medium transition-all"
+                          style={{ background: timeLimit === t ? theme.colors.primary : theme.colors.surface, color: timeLimit === t ? theme.colors.background : theme.colors.textMuted }}>{t}s</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}><Target size={12} className="inline mr-1" /> Difficulty</label>
+                    <div className="flex gap-1">
+                      {(["easy", "medium", "hard"] as const).map((d) => (
+                        <button key={d} onClick={() => setDifficulty(d)} className="flex-1 px-2 py-1.5 rounded text-xs font-medium capitalize transition-all"
+                          style={{ background: difficulty === d ? theme.colors.primary : theme.colors.surface, color: difficulty === d ? theme.colors.background : theme.colors.textMuted }}>{d}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-2 block" style={{ color: theme.colors.textMuted }}>Language</label>
+                    <div className="flex gap-1">
+                      {[{ key: "en" as Language, label: "EN" }, { key: "id" as Language, label: "ID" }].map((l) => (
+                        <button key={l.key} onClick={() => setLanguage(l.key)} className="flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all"
+                          style={{ background: language === l.key ? theme.colors.primary : theme.colors.surface, color: language === l.key ? theme.colors.background : theme.colors.textMuted }}>{l.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {mode === "solo" && (
+                <div className="flex justify-center">
+                  <Button onClick={startTest} size="lg" glow><Keyboard size={20} /> Start Typing</Button>
+                </div>
+              )}
+
+              {mode === "race" && (
+                <Card variant="glass" className="p-4">
+                  <div className="text-xs font-bold mb-3 tracking-wider" style={{ color: theme.colors.textMuted }}>MULTIPLAYER ROOM</div>
+                  <div className="flex gap-2 items-center mb-3">
+                    <Button size="sm" onClick={createRoom} glow><Crown size={12} /> Create Room</Button>
+                    <span className="text-xs" style={{ color: theme.colors.textMuted }}>or</span>
+                    <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="CODE"
+                      className="w-20 px-2 py-1 rounded text-xs font-mono text-center" style={{ background: theme.colors.background, color: theme.colors.text, border: "1px solid " + theme.colors.border }}
+                      maxLength={6} />
+                    <Button size="sm" variant="secondary" onClick={() => { if (joinCode.length >= 4) joinRoomByCode(joinCode); }} disabled={joinCode.length < 4}>Join</Button>
+                  </div>
+                  {onlineUsers.length > 0 && (
+                    <div className="pt-3" style={{ borderTop: "1px solid " + theme.colors.border }}>
+                      <div className="text-[10px] font-bold mb-2 tracking-wider" style={{ color: theme.colors.textMuted }}>ONLINE ({onlineUsers.length})</div>
+                      <div className="flex flex-wrap gap-2">
+                        {onlineUsers.filter((u) => u.status === "browsing").map((u) => (
+                          <div key={u.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-pointer transition-all hover:opacity-80" style={{ background: theme.colors.surface, border: "1px solid " + theme.colors.border }}>
+                            <span className="w-2 h-2 rounded-full bg-green-400" />
+                            <span className="text-xs">{u.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      {/* LOBBY VIEW */}
+      {view === "lobby" && (
+        <div className="space-y-4">
+          <Card variant="glass" className="p-6 text-center">
+            <Crown size={32} className="mx-auto mb-3" style={{ color: "#fbbf24" }} />
+            <h2 className="text-lg font-bold mb-1">Room: <code className="font-mono" style={{ color: theme.colors.primary }}>{roomCode}</code></h2>
+            <button onClick={copyCode} className="text-xs flex items-center gap-1 mx-auto mb-4 px-3 py-1.5 rounded-lg transition-all" style={{ background: theme.colors.surface, color: theme.colors.textMuted }}>
+              {copied ? <><Check size={12} className="text-green-400" /> Copied!</> : <><Copy size={12} /> Copy Code</>}
+            </button>
+            <div className="text-xs mb-4" style={{ color: theme.colors.textMuted }}>
+              {isHost ? "Share code atau invite player yang online" : "Menunggu host mulai race..."}
+            </div>
+          </Card>
+
+          <Card variant="glass" className="p-4">
+            <div className="text-xs font-bold mb-3 tracking-wider flex items-center gap-2" style={{ color: theme.colors.textMuted }}>
+              <Users size={12} /> PLAYERS IN ROOM ({players.length})
+            </div>
+            {players.length === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: theme.colors.textMuted }}>Menunggu pemain...</p>
+            ) : (
+              <div className="space-y-2">
+                {players.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: p.isYou ? theme.colors.primary + "15" : theme.colors.background, border: "1px solid " + theme.colors.border }}>
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ background: p.color }} />
+                    <span className="text-sm font-medium flex-1">{p.name} {p.isYou && <Badge variant="primary" className="text-[9px] ml-1">YOU</Badge>}</span>
+                    {p.id === players[0]?.id && <Crown size={12} style={{ color: "#fbbf24" }} />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {onlineUsers.filter((u) => u.status === "browsing").length > 0 && (
+            <Card variant="glass" className="p-4">
+              <div className="text-xs font-bold mb-3 tracking-wider flex items-center gap-2" style={{ color: theme.colors.textMuted }}>
+                <Zap size={12} /> INVITE ONLINE PLAYERS
+              </div>
+              <div className="space-y-1">
+                {onlineUsers.filter((u) => u.status === "browsing").map((u) => (
+                  <div key={u.id} className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all hover:opacity-80" style={{ background: theme.colors.surface, border: "1px solid " + theme.colors.border }}
+                    onClick={invitePlayer}>
+                    <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+                    <span className="text-sm flex-1">{u.name}</span>
+                    <Button size="sm" variant="ghost" className="text-[10px]"><Send size={10} /> Invite</Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          <div className="flex justify-center gap-3">
+            {isHost && players.length >= 2 && <Button onClick={startRace} size="lg" glow><Zap size={18} /> Start Race!</Button>}
+            {isHost && players.length < 2 && (
+              <p className="text-xs px-4 py-2 rounded-lg" style={{ background: theme.colors.surface, color: theme.colors.textMuted }}>
+                Minimal 2 pemain untuk mulai race
+              </p>
+            )}
+            {!isHost && <p className="text-sm py-2" style={{ color: theme.colors.textMuted }}>Menunggu host mulai race...</p>}
+            <Button variant="secondary" onClick={leaveRoom}><X size={14} /> Leave</Button>
+          </div>
+        </div>
+      )}
+      {/* RACE TRACK - shows during racing */}
+      {(view === "racing" || view === "countdown") && mode === "race" && players.length > 0 && (
         <div className="mb-6">
           <RaceTrack players={players} theme={theme} />
         </div>
       )}
 
-      <Card variant="glass" className="p-6 mb-4">
-        <div
-          className="text-xl leading-relaxed font-mono cursor-text select-none min-h-[80px]"
-          onClick={() => inputRef.current?.focus()}
-        >
-          {words.map((w, wi) => (
-            <span key={wi} style={{
-              padding: "1px 2px",
-              borderRadius: "3px",
-              background: wi === currentWordIdx ? `${theme.colors.primary}15` : "transparent",
-            }}>
-              {w.word.split("").map((char, ci) => {
-                let style: React.CSSProperties = { color: "#555" };
-                if (wi < currentWordIdx) {
-                  style = { color: w.status === "correct" ? "#22c55e" : "#ef4444" };
-                } else if (wi === currentWordIdx) {
-                  if (ci < typedInput.length) {
-                    style = {
-                      color: typedInput[ci] === char ? "#22c55e" : "#ef4444",
-                      borderBottom: `2px solid ${typedInput[ci] === char ? "#22c55e" : "#ef4444"}`,
-                    };
-                  } else if (ci === typedInput.length) {
-                    style = {
-                      color: "#fff",
-                      borderBottom: `2px solid ${theme.colors.primary}`,
-                    };
+      {/* TYPING AREA */}
+      {(view === "racing" || (view === "setup" && mode === "solo" && words.length > 0 && !isActive && !isFinished)) && words.length > 0 && (
+        <Card variant="glass" className="p-6 mb-4">
+          <div className="text-xl leading-relaxed font-mono cursor-text select-none min-h-[80px]" onClick={() => inputRef.current?.focus()}>
+            {words.map((w, wi) => (
+              <span key={wi} style={{ padding: "1px 2px", borderRadius: "3px", background: wi === currentWordIdx ? theme.colors.primary + "15" : "transparent" }}>
+                {w.word.split("").map((char, ci) => {
+                  let st: React.CSSProperties = { color: "#555" };
+                  if (wi < currentWordIdx) { st = { color: w.status === "correct" ? "#22c55e" : "#ef4444" }; }
+                  else if (wi === currentWordIdx) {
+                    if (ci < typedInput.length) { st = { color: typedInput[ci] === char ? "#22c55e" : "#ef4444", borderBottom: "2px solid " + (typedInput[ci] === char ? "#22c55e" : "#ef4444") }; }
+                    else if (ci === typedInput.length) { st = { color: "#fff", borderBottom: "2px solid " + theme.colors.primary }; }
                   }
-                }
-                return <span key={ci} style={style}>{char}</span>;
-              })}
-              <span style={{ color: "transparent" }}> </span>
-            </span>
+                  return <span key={ci} style={st}>{char}</span>;
+                })}
+                <span style={{ color: "transparent" }}> </span>
+              </span>
+            ))}
+          </div>
+          <input ref={inputRef} type="text" className="absolute opacity-0 w-0 h-0" onKeyDown={handleKeyDown} value={typedInput} readOnly autoFocus />
+        </Card>
+      )}
+
+      {/* STATS BAR */}
+      {(view === "racing" || (isActive && mode === "solo")) && (
+        <div className="flex items-center justify-center gap-8 mb-6 py-3">
+          {[
+            { label: "wpm", value: wpm, color: theme.colors.primary },
+            { label: "acc", value: accuracy + "%", color: "#22c55e" },
+            { label: "time", value: timeLeft + "s", color: timeLeft <= 10 ? "#ef4444" : theme.colors.accent },
+            { label: "raw", value: correctChars + incorrectChars, color: theme.colors.textMuted },
+          ].map((s) => (
+            <div key={s.label} className="text-center">
+              <div className="text-2xl font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
+              <div className="text-[10px] uppercase tracking-widest" style={{ color: theme.colors.textMuted }}>{s.label}</div>
+            </div>
           ))}
         </div>
-        <input
-          ref={inputRef}
-          type="text"
-          className="absolute opacity-0 w-0 h-0"
-          onKeyDown={handleKeyDown}
-          value={typedInput}
-          readOnly
-          autoFocus
-        />
-      </Card>
+      )}
 
-      <div className="flex items-center justify-center gap-8 mb-6 py-3">
-        {[
-          { label: "wpm", value: wpm, color: theme.colors.primary },
-          { label: "acc", value: `${accuracy}%`, color: "#22c55e" },
-          { label: "time", value: `${timeLeft}s`, color: timeLeft <= 10 ? "#ef4444" : theme.colors.accent },
-          { label: "raw", value: correctChars + incorrectChars, color: theme.colors.textMuted },
-        ].map((s) => (
-          <div key={s.label} className="text-center">
-            <div className="text-2xl font-bold font-mono" style={{ color: s.color }}>{s.value}</div>
-            <div className="text-[10px] uppercase tracking-widest" style={{ color: theme.colors.textMuted }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex justify-center gap-4 mb-8">
-        {!isActive && !isFinished && (
-          <Button onClick={startTest} size="lg" glow>
-            <Keyboard size={20} /> Start Typing
-          </Button>
-        )}
-        {isActive && (
+      {/* SOLO START BUTTON */}
+      {view === "setup" && mode === "solo" && !isActive && !isFinished && nickname && (
+        <div className="flex justify-center gap-4 mb-8">
           <p className="text-sm flex items-center gap-2" style={{ color: theme.colors.textMuted }}>
-            Press <kbd className="px-2 py-0.5 rounded text-xs" style={{ background: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>Tab</kbd> to restart
+            Press <kbd className="px-2 py-0.5 rounded text-xs" style={{ background: theme.colors.surface, border: "1px solid " + theme.colors.border }}>Tab</kbd> to restart during typing
           </p>
-        )}
-      </div>
-
+        </div>
+      )}
+      {/* FINISHED VIEW */}
       <AnimatePresence>
-        {isFinished && (
+        {view === "finished" && (
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <Card variant="glow" className="p-8 text-center mb-8">
               <Trophy size={48} className="mx-auto mb-4" style={{ color: theme.colors.primary }} />
-              <h2 className="text-3xl font-bold mb-2" style={{ fontFamily: "'Cinzel', serif" }}>Test Selesai!</h2>
+              <h2 className="text-3xl font-bold mb-2">Test Selesai!</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                 {[
                   { label: "WPM", value: wpm, color: theme.colors.primary },
-                  { label: "Accuracy", value: `${accuracy}%`, color: "#22c55e" },
+                  { label: "Accuracy", value: accuracy + "%", color: "#22c55e" },
                   { label: "Max WPM", value: maxWpm, color: theme.colors.secondary },
                   { label: "Total Chars", value: correctChars + incorrectChars, color: theme.colors.accent },
                 ].map((s) => (
@@ -663,12 +762,11 @@ export default function TypingTestPage() {
                 ))}
               </div>
               {mode === "race" && players.length > 0 && (
-                <div className="mt-6 pt-6" style={{ borderTop: `1px solid ${theme.colors.border}` }}>
-                  <h3 className="text-lg font-bold mb-3" style={{ color: theme.colors.text }}>Race Results</h3>
+                <div className="mt-6 pt-6" style={{ borderTop: "1px solid " + theme.colors.border }}>
+                  <h3 className="text-lg font-bold mb-3">Race Results</h3>
                   <div className="space-y-1">
                     {[...players].sort((a, b) => b.wpm - a.wpm).map((p, i) => (
-                      <div key={p.id} className="flex items-center gap-3 px-4 py-2 rounded-lg"
-                        style={{ background: p.isYou ? `${theme.colors.primary}15` : "transparent" }}>
+                      <div key={p.id} className="flex items-center gap-3 px-4 py-2 rounded-lg" style={{ background: p.isYou ? theme.colors.primary + "15" : "transparent" }}>
                         <span className="text-sm font-bold w-6" style={{ color: i === 0 ? "#fbbf24" : theme.colors.textMuted }}>#{i + 1}</span>
                         <span className="flex items-center gap-2 flex-1 text-sm">
                           <span className="w-3 h-3 rounded-full" style={{ background: p.color }} />
@@ -681,53 +779,56 @@ export default function TypingTestPage() {
                 </div>
               )}
               <div className="flex justify-center gap-3 mt-6">
-                <Button onClick={startTest} glow><RotateCcw size={16} /> Main Lagi</Button>
-                <Button variant="secondary" onClick={() => setIsFinished(false)}>Leaderboard</Button>
+                <Button onClick={() => { resetAll(); if (mode === "solo") startTest(); }} glow><RotateCcw size={16} /> Main Lagi</Button>
+                <Button variant="secondary" onClick={resetAll}>Kembali</Button>
               </div>
             </Card>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <Card variant="glass" className="p-6">
-        <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-          <Trophy size={20} style={{ color: theme.colors.primary }} />
-          Leaderboard
-          <Badge variant="primary" className="ml-2 capitalize">{difficulty}</Badge>
-        </h2>
-        {leaderboard.length === 0 ? (
-          <p className="text-center py-8 text-sm" style={{ color: theme.colors.textMuted }}>Belum ada hasil. Jadilah yang pertama!</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ color: theme.colors.textMuted }}>
-                  <th className="text-left py-2 px-3">#</th>
-                  <th className="text-left py-2 px-3">Player</th>
-                  <th className="text-right py-2 px-3">WPM</th>
-                  <th className="text-right py-2 px-3">Accuracy</th>
-                  <th className="text-right py-2 px-3">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leaderboard.map((result, i) => (
-                  <tr key={result.id} style={{ color: theme.colors.text, borderTop: `1px solid ${theme.colors.border}` }}>
-                    <td className="py-2.5 px-3 font-mono">
-                      {i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : i + 1}
-                    </td>
-                    <td className="py-2.5 px-3">{result.nickname || "Anonymous"}</td>
-                    <td className="py-2.5 px-3 text-right font-mono font-bold" style={{ color: theme.colors.primary }}>{result.wpm}</td>
-                    <td className="py-2.5 px-3 text-right font-mono">{result.accuracy}%</td>
-                    <td className="py-2.5 px-3 text-right text-xs" style={{ color: theme.colors.textMuted }}>
-                      {new Date(result.completed_at).toLocaleDateString("id-ID")}
-                    </td>
+      {/* LEADERBOARD */}
+      {view !== "lobby" && (
+        <Card variant="glass" className="p-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Trophy size={20} style={{ color: theme.colors.primary }} />
+            Leaderboard
+            <Badge variant="primary" className="ml-2 capitalize">{difficulty}</Badge>
+          </h2>
+          {leaderboard.length === 0 ? (
+            <p className="text-center py-8 text-sm" style={{ color: theme.colors.textMuted }}>Belum ada hasil. Jadilah yang pertama!</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ color: theme.colors.textMuted }}>
+                    <th className="text-left py-2 px-3">#</th>
+                    <th className="text-left py-2 px-3">Player</th>
+                    <th className="text-right py-2 px-3">WPM</th>
+                    <th className="text-right py-2 px-3">Accuracy</th>
+                    <th className="text-right py-2 px-3">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                </thead>
+                <tbody>
+                  {leaderboard.map((result, i) => (
+                    <tr key={result.id} style={{ color: theme.colors.text, borderTop: "1px solid " + theme.colors.border }}>
+                      <td className="py-2.5 px-3 font-mono">
+                        {i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : i + 1}
+                      </td>
+                      <td className="py-2.5 px-3">{result.nickname || "Anonymous"}</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold" style={{ color: theme.colors.primary }}>{result.wpm}</td>
+                      <td className="py-2.5 px-3 text-right font-mono">{result.accuracy}%</td>
+                      <td className="py-2.5 px-3 text-right text-xs" style={{ color: theme.colors.textMuted }}>
+                        {new Date(result.completed_at).toLocaleDateString("id-ID")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

@@ -47,6 +47,34 @@ function createDummyClient() {
     then: (resolve: (v: typeof emptyResult) => void) => resolve(emptyResult),
   };
 
+  function createDummyChannel() {
+    const broadcastHandlers: Record<string, Function[]> = {};
+    const presenceHandlers: Record<string, Function[]> = {};
+    return {
+      on: (type: string, filter: { event: string } | Function, callback?: Function) => {
+        const evt = typeof filter === "function" ? "*" : filter.event;
+        const cb = typeof filter === "function" ? filter : callback;
+        if (type === "broadcast" && cb) {
+          if (!broadcastHandlers[evt]) broadcastHandlers[evt] = [];
+          broadcastHandlers[evt].push(cb);
+        } else if (type === "presence" && cb) {
+          if (!presenceHandlers[evt]) presenceHandlers[evt] = [];
+          presenceHandlers[evt].push(cb);
+        }
+        return createDummyChannel();
+      },
+      send: async (_payload: unknown) => ({ error: null }),
+      track: async (_state: unknown) => ({ error: null }),
+      unsubscribe: () => {},
+      subscribe: (callback?: (status: string) => void) => {
+        if (callback) setTimeout(() => callback("SUBSCRIBED"), 10);
+        return { error: null };
+      },
+      presenceState: () => ({} as Record<string, unknown[]>),
+      leave: async () => ({ error: null }),
+    };
+  }
+
   return {
     auth: {
       getUser: () => Promise.resolve({ data: { user: null }, error: null }),
@@ -58,5 +86,8 @@ function createDummyClient() {
     },
     from: () => chainable,
     rpc: () => Promise.resolve(emptyResult),
+    channel: (_name: string, _opts?: unknown) => createDummyChannel(),
+    removeChannel: () => Promise.resolve({ error: null }),
+    removeAllChannels: () => Promise.resolve({ error: null }),
   } as unknown as ReturnType<typeof createBrowserClient>;
 }
