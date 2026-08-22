@@ -59,14 +59,34 @@ export async function POST(req: NextRequest) {
         }, { onConflict: "room_code", ignoreDuplicates: false });
       if (roomErr) console.error("Room upsert error:", roomErr);
 
-      const { error } = await supabase
-        .from("race_players")
-        .upsert({
-          id, room_code: roomCode, name: name || "Anonymous",
-          color: color || "#ef4444", wpm: 0, progress: 0,
-          finished: false, is_host: !!is_host, last_seen: new Date().toISOString(),
-        }, { onConflict: "id" });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      // Don't overwrite is_host if player already has it in DB
+      if (is_host) {
+        const { error } = await supabase
+          .from("race_players")
+          .upsert({
+            id, room_code: roomCode, name: name || "Anonymous",
+            color: color || "#ef4444", wpm: 0, progress: 0,
+            finished: false, is_host: true, last_seen: new Date().toISOString(),
+          }, { onConflict: "id" });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      } else {
+        // Check if already host in DB
+        const { data: existing } = await supabase
+          .from("race_players")
+          .select("is_host")
+          .eq("id", id)
+          .eq("room_code", roomCode)
+          .single();
+        const wasHost = existing?.is_host;
+        const { error } = await supabase
+          .from("race_players")
+          .upsert({
+            id, room_code: roomCode, name: name || "Anonymous",
+            color: color || "#ef4444", wpm: 0, progress: 0,
+            finished: false, is_host: !!wasHost, last_seen: new Date().toISOString(),
+          }, { onConflict: "id" });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      }
       return NextResponse.json({ success: true });
     }
 

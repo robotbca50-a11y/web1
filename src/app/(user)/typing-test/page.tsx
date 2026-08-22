@@ -239,6 +239,13 @@ export default function TypingTestPage() {
       }));
       setPlayers(mapped);
 
+      // Auto-detect host status from DB
+      const me = mapped.find((p) => p.isYou);
+      if (me && me.is_host && !isHostRef.current) {
+        setIsHost(true);
+        isHostRef.current = true;
+      }
+
       if (room && room.status === "countdown" && !countdownSeenRef.current && viewRef.current === "lobby") {
         countdownSeenRef.current = true;
         const textContent = room.text_content as string;
@@ -288,6 +295,7 @@ export default function TypingTestPage() {
     setIsHost(true);
     isHostRef.current = true;
     myColorRef.current = COLORS[0];
+    if (typeof window !== "undefined") localStorage.setItem("typing-host-room", code);
     window.history.replaceState({}, "", "?room=" + code);
     setView("lobby");
     await apiPost({ action: "join", code, id: playerIdRef.current, name: nickname || "Host", color: COLORS[0], is_host: true, difficulty, time_limit: timeLimit, language });
@@ -295,12 +303,14 @@ export default function TypingTestPage() {
   };
 
   const autoJoinRoom = useCallback(async (code: string) => {
+    const savedHostRoom = typeof window !== "undefined" ? localStorage.getItem("typing-host-room") : null;
+    const iAmHost = savedHostRoom === code;
     setRoomCode(code);
-    setIsHost(false);
-    isHostRef.current = false;
-    myColorRef.current = COLORS[Math.floor(Math.random() * COLORS.length)];
+    setIsHost(iAmHost);
+    isHostRef.current = iAmHost;
+    myColorRef.current = iAmHost ? COLORS[0] : COLORS[Math.floor(Math.random() * COLORS.length)];
     setView("lobby");
-    await apiPost({ action: "join", code, id: playerIdRef.current, name: nickname || "Anonymous", color: myColorRef.current, is_host: false, difficulty: difficultyRef.current, time_limit: timeLimitRef.current, language: languageRef.current });
+    await apiPost({ action: "join", code, id: playerIdRef.current, name: nickname || (iAmHost ? "Host" : "Anonymous"), color: myColorRef.current, is_host: iAmHost, difficulty: difficultyRef.current, time_limit: timeLimitRef.current, language: languageRef.current });
     startPolling(code);
   }, [nickname, apiPost, startPolling]);
 
@@ -451,6 +461,7 @@ export default function TypingTestPage() {
     setRoomCode("");
     setIsHost(false);
     isHostRef.current = false;
+    if (typeof window !== "undefined") localStorage.removeItem("typing-host-room");
     setPlayers([]);
     countdownSeenRef.current = false;
     setView("setup");
