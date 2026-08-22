@@ -182,6 +182,13 @@ export default function TypingTestPage() {
   const globalChannelRef = useRef<any>(null);
   const playerIdRef = useRef(getPlayerId());
   const myColorRef = useRef(COLORS[0]);
+  const isHostRef = useRef(false);
+  const playersCountRef = useRef(0);
+  const wpmRef = useRef(0);
+  const correctCharsRef = useRef(0);
+  const incorrectCharsRef = useRef(0);
+  const viewRef = useRef(view);
+  useEffect(() => { viewRef.current = view; }, [view]);
 
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
@@ -216,7 +223,7 @@ export default function TypingTestPage() {
       setOnlineUsers(users);
     });
     ch.on("broadcast", { event: "invite" }, ({ payload }: { payload: { fromId: string; fromName: string; roomCode: string } }) => {
-      if (payload.fromId !== playerIdRef.current && view === "setup") {
+      if (payload.fromId !== playerIdRef.current && viewRef.current === "setup") {
         setInvite({ hostName: payload.fromName, roomCode: payload.roomCode });
       }
     });
@@ -237,7 +244,7 @@ export default function TypingTestPage() {
 
   const setupRoomChannel = useCallback((code: string) => {
     const supabase = createClient();
-    myColorRef.current = isHost ? COLORS[0] : COLORS[Math.min(players.length, COLORS.length - 1)];
+    myColorRef.current = isHostRef.current ? COLORS[0] : COLORS[Math.min(playersCountRef.current, COLORS.length - 1)];
     const ch = supabase.channel("typing-room:" + code, {
       config: { presence: { key: playerIdRef.current } },
     });
@@ -253,6 +260,7 @@ export default function TypingTestPage() {
           });
         });
       });
+      playersCountRef.current = allPlayers.length;
       setPlayers(allPlayers);
     });
     ch.on("broadcast", { event: "countdown" }, ({ payload }: { payload: { value: number } }) => {
@@ -290,7 +298,7 @@ export default function TypingTestPage() {
       }
     });
     channelRef.current = ch;
-  }, [nickname, timeLimit, isHost, players.length]);
+  }, [nickname, timeLimit]);
 
   const broadcastProgress = useCallback((myWpm: number, myProgress: number) => {
     const ch = channelRef.current;
@@ -301,9 +309,11 @@ export default function TypingTestPage() {
     const code = generateRoomCode();
     setRoomCode(code);
     setIsHost(true);
+    isHostRef.current = true;
     myColorRef.current = COLORS[0];
     const supabase = createClient();
-    await supabase.from("typing_rooms").insert({ room_code: code, host_nickname: nickname || "Host", status: "waiting", difficulty, text_content: "", time_limit: timeLimit, language });
+    const { error } = await supabase.from("typing_rooms").insert({ room_code: code, host_nickname: nickname || "Host", status: "waiting", difficulty, text_content: "", time_limit: timeLimit, language });
+    if (error) console.error("Room insert failed (tables may not exist):", error.message);
     setupRoomChannel(code);
     updateGlobalPresence("in-room", code);
     setView("lobby");
@@ -392,19 +402,26 @@ export default function TypingTestPage() {
     setIsFinished(true);
     if (timerRef.current) clearInterval(timerRef.current);
     if (broadcastRef.current) clearInterval(broadcastRef.current);
-    const total = correctChars + incorrectChars;
-    const finalAcc = total > 0 ? calculateAccuracy(correctChars, total) : 0;
+    const curWpm = wpmRef.current;
+    const curCorrect = correctCharsRef.current;
+    const curIncorrect = incorrectCharsRef.current;
+    const total = curCorrect + curIncorrect;
+    const finalAcc = total > 0 ? calculateAccuracy(curCorrect, total) : 0;
     setAccuracy(finalAcc);
     if (mode === "race" && roomCode) {
       const ch = channelRef.current;
-      if (ch) ch.send({ type: "broadcast", event: "race-finish", payload: { id: playerIdRef.current, name: nickname || "Anonymous", wpm, accuracy: finalAcc } });
+      if (ch) ch.send({ type: "broadcast", event: "race-finish", payload: { id: playerIdRef.current, name: nickname || "Anonymous", wpm: curWpm, accuracy: finalAcc } });
       updateGlobalPresence("browsing");
     }
     const supabase = createClient();
-    supabase.from("typing_results").insert({ nickname: nickname || "Anonymous", wpm, accuracy: finalAcc, difficulty, mode, text_content: text.substring(0, 200), max_wpm: maxWpm, completed_at: new Date().toISOString(), room_code: roomCode || null })
+    supabase.from("typing_results").insert({ nickname: nickname || "Anonymous", wpm: curWpm, accuracy: finalAcc, difficulty, mode, text_content: text.substring(0, 200), max_wpm: maxWpm, completed_at: new Date().toISOString(), room_code: roomCode || null })
       .then(({ error }: { error: unknown }) => { if (error) console.error("Save failed:", error); });
     setView("finished");
-  }, [correctChars, incorrectChars, wpm, difficulty, mode, text, maxWpm, nickname, roomCode, updateGlobalPresence]);
+  }, [difficulty, mode, text, maxWpm, nickname, roomCode, updateGlobalPresence]);
+
+  useEffect(() => { wpmRef.current = wpm; }, [wpm]);
+  useEffect(() => { correctCharsRef.current = correctChars; }, [correctChars]);
+  useEffect(() => { incorrectCharsRef.current = incorrectChars; }, [incorrectChars]);
 
   useEffect(() => {
     if (isActive && !isFinished) {
@@ -433,10 +450,10 @@ export default function TypingTestPage() {
 
   useEffect(() => {
     if (isActive && !isFinished) {
-      broadcastRef.current = setInterval(() => { broadcastProgress(wpm, progress); }, 200);
+      broadcastRef.current = setInterval(() => { broadcastProgress(wpmRef.current, progress); }, 200);
     }
     return () => { if (broadcastRef.current) clearInterval(broadcastRef.current); };
-  }, [isActive, isFinished, wpm, progress, broadcastProgress]);
+  }, [isActive, isFinished, progress, broadcastProgress]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isActive || isFinished) return;
@@ -458,7 +475,7 @@ export default function TypingTestPage() {
     if (e.key.length === 1) { e.preventDefault(); const cw = words[currentWordIdx]; if (cw) setTypedInput((p) => p + e.key); }
   };
   const copyCode = () => { navigator.clipboard.writeText(roomCode); setCopied(true); setTimeout(() => setCopied(false), 2000); };
-  const leaveRoom = () => { channelRef.current?.unsubscribe(); updateGlobalPresence("browsing"); setRoomCode(""); setIsHost(false); setPlayers([]); setView("setup"); };
+  const leaveRoom = () => { channelRef.current?.unsubscribe(); updateGlobalPresence("browsing"); setRoomCode(""); setIsHost(false); isHostRef.current = false; setPlayers([]); setView("setup"); };
   const invitePlayer = () => { const ch = globalChannelRef.current; if (ch && roomCode) ch.send({ type: "broadcast", event: "invite", payload: { fromId: playerIdRef.current, fromName: nickname || "Host", roomCode } }); };
 
   const resetAll = () => {
