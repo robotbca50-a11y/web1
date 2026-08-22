@@ -713,9 +713,9 @@ export default function TypingTestPage() {
       )}
 
       {/* TYPING AREA */}
-      {(view === "racing" || (view === "setup" && mode === "solo" && words.length > 0 && !isActive && !isFinished)) && words.length > 0 && (
-        <Card variant="glass" className="p-6 mb-4">
-          <div className="text-xl leading-relaxed font-mono cursor-text select-none min-h-[80px]" onClick={() => inputRef.current?.focus()}>
+      {((view === "racing") || (view === "setup" && mode === "solo" && words.length > 0 && !isFinished)) && words.length > 0 && (
+        <Card variant="glass" className="p-6 mb-4 relative" onClick={() => inputRef.current?.focus()}>
+          <div className="text-xl leading-relaxed font-mono cursor-text select-none min-h-[80px]">
             {words.map((w, wi) => (
               <span key={wi} style={{ padding: "1px 2px", borderRadius: "3px", background: wi === currentWordIdx ? theme.colors.primary + "15" : "transparent" }}>
                 {w.word.split("").map((char, ci) => {
@@ -725,13 +725,13 @@ export default function TypingTestPage() {
                     if (ci < typedInput.length) { st = { color: typedInput[ci] === char ? "#22c55e" : "#ef4444", borderBottom: "2px solid " + (typedInput[ci] === char ? "#22c55e" : "#ef4444") }; }
                     else if (ci === typedInput.length) { st = { color: "#fff", borderBottom: "2px solid " + theme.colors.primary }; }
                   }
-                  return <span key={ci} style={st}>{char}</span>;
+                   return <span key={ci} style={st}>{char}</span>;
                 })}
                 <span style={{ color: "transparent" }}> </span>
               </span>
             ))}
           </div>
-          <input ref={inputRef} type="text" className="absolute opacity-0 w-0 h-0" onKeyDown={handleKeyDown} value={typedInput} readOnly autoFocus />
+          <input ref={inputRef} type="text" className="absolute inset-0 w-full h-full opacity-0 cursor-text" style={{ fontSize: "16px" }} onKeyDown={handleKeyDown} value={typedInput} readOnly autoFocus />
         </Card>
       )}
 
