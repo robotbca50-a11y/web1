@@ -293,6 +293,11 @@ export default function TypingTestPage() {
     ch.on("broadcast", { event: "race-finish" }, ({ payload }: { payload: { id: string; wpm: number } }) => {
       setPlayers((prev) => prev.map((p) => p.id === payload.id ? { ...p, wpm: payload.wpm, progress: 100, finished: true } : p));
     });
+    ch.on("broadcast", { event: "join-request" }, ({ payload }: { payload: { id: string; name: string } }) => {
+      if (isHostRef.current) {
+        ch.send({ type: "broadcast", event: "join-accepted", payload: { difficulty, timeLimit, language, hostName: nickname || "Host" } });
+      }
+    });
     ch.subscribe((status: string) => {
       if (status === "SUBSCRIBED") {
         ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", color: myColorRef.current, wpm: 0, progress: 0, finished: false });
@@ -321,17 +326,42 @@ export default function TypingTestPage() {
   };
 
   const joinRoomByCode = async (code: string) => {
-    const supabase = createClient();
-    const { data } = await supabase.from("typing_rooms").select("*").eq("room_code", code.toUpperCase()).eq("status", "waiting").single();
-    if (!data) { alert("Room not found or already started!"); return; }
-    setRoomCode(code.toUpperCase());
+    const roomCodeStr = code.toUpperCase();
+    setRoomCode(roomCodeStr);
     setIsHost(false);
-    setDifficulty(data.difficulty);
-    setTimeLimit(data.time_limit || 60);
-    if (data.language) setLanguage(data.language);
-    setupRoomChannel(code.toUpperCase());
-    updateGlobalPresence("in-room", code.toUpperCase());
-    setView("lobby");
+    isHostRef.current = false;
+    setupRoomChannel(roomCodeStr);
+    updateGlobalPresence("in-room", roomCodeStr);
+
+    const supabase = createClient();
+    const ch = supabase.channel("typing-room:" + roomCodeStr, {
+      config: { presence: { key: playerIdRef.current } },
+    });
+
+    ch.on("broadcast", { event: "join-accepted" }, ({ payload }: { payload: { difficulty: string; timeLimit: number; language: string; hostName: string } }) => {
+      setDifficulty(payload.difficulty as "easy" | "medium" | "hard");
+      setTimeLimit(payload.timeLimit);
+      if (payload.language) setLanguage(payload.language as Language);
+      ch.unsubscribe();
+      setView("lobby");
+    });
+
+    ch.subscribe((status: string) => {
+      if (status === "SUBSCRIBED") {
+        ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", color: COLORS[1], wpm: 0, progress: 0, finished: false });
+        setTimeout(() => {
+          ch.send({ type: "broadcast", event: "join-request", payload: { id: playerIdRef.current, name: nickname || "Anonymous" } });
+        }, 500);
+
+        const timeout = setTimeout(() => {
+          ch.unsubscribe();
+          setRoomCode("");
+          setView("setup");
+          alert("Room not found! Pastikan host masih di lobby dan code benar.");
+        }, 5000);
+        ch.on("broadcast", { event: "join-accepted" }, () => clearTimeout(timeout));
+      }
+    });
   };
 
   const acceptInvite = () => {
