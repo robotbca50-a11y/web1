@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
-import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ interface Player {
   color: string;
   isYou: boolean;
   finished: boolean;
+  is_host?: boolean;
 }
 
 type View = "setup" | "lobby" | "countdown" | "racing" | "finished";
@@ -159,17 +160,17 @@ export default function TypingTestPage() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [leaderboard, setLeaderboard] = useState<TypingResult[]>([]);
-  const [channelConnected, setChannelConnected] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const broadcastRef = useRef<NodeJS.Timeout | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const channelRef = useRef<any>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
   const playerIdRef = useRef(getPlayerId());
   const myColorRef = useRef(COLORS[0]);
   const isHostRef = useRef(false);
+  const roomCodeRef = useRef("");
+  const countdownSeenRef = useRef(false);
   const wpmRef = useRef(0);
   const correctCharsRef = useRef(0);
   const incorrectCharsRef = useRef(0);
@@ -182,6 +183,7 @@ export default function TypingTestPage() {
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
   useEffect(() => { languageRef.current = language; }, [language]);
   useEffect(() => { timeLimitRef.current = timeLimit; }, [timeLimit]);
+  useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
 
   const currentTheme = useThemeStore((s) => s.currentTheme);
   const theme = getTheme(currentTheme);
@@ -208,153 +210,102 @@ export default function TypingTestPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nickname]);
 
-  const setupRoomChannel = useCallback((code: string) => {
-    const supabase = createClient();
-    if (channelRef.current) { channelRef.current.unsubscribe(); }
-    setChannelConnected(false);
-    myColorRef.current = isHostRef.current ? COLORS[0] : COLORS[Math.floor(Math.random() * COLORS.length)];
-
-    const selfPlayer: Player = {
-      id: playerIdRef.current, name: nickname || "Anonymous",
-      wpm: 0, progress: 0, color: myColorRef.current, isYou: true, finished: false,
-    };
-    setPlayers([selfPlayer]);
-
-    console.log("[CHANNEL] Creating channel:", "typing-room:" + code, "playerId:", playerIdRef.current);
-    const ch = supabase.channel("typing-room:" + code, {
-      config: { presence: { key: playerIdRef.current } },
-    });
-    ch.on("presence", { event: "sync" }, () => {
-      const state = ch.presenceState() as Record<string, { id: string; name: string; color: string; wpm: number; progress: number; finished: boolean }[]>;
-      console.log("[CHANNEL] Presence sync, state keys:", Object.keys(state));
-      const allPlayers: Player[] = [];
-      Object.values(state).forEach((members) => {
-        members.forEach((m) => {
-          allPlayers.push({
-            id: m.id, name: m.name, wpm: m.wpm || 0, progress: m.progress || 0,
-            color: m.color, isYou: m.id === playerIdRef.current, finished: m.finished || false,
-          });
-        });
+  const apiPost = useCallback(async (body: Record<string, unknown>) => {
+    try {
+      await fetch("/api/race", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-      if (allPlayers.length > 0) {
-        setPlayers(allPlayers);
-      } else {
-        setPlayers((prev) => {
-          const hasSelf = prev.some((p) => p.isYou);
-          return hasSelf ? prev : [selfPlayer];
-        });
-      }
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ch.on("presence", { event: "join" }, ({ key, newPresences }: any) => {
-      console.log("[CHANNEL] Presence join:", key, newPresences);
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ch.on("presence", { event: "leave" }, ({ key, leftPresences }: any) => {
-      console.log("[CHANNEL] Presence leave:", key, leftPresences);
-    });
-    ch.on("broadcast", { event: "countdown" }, ({ payload }: { payload: { value: number } }) => {
-      setView("countdown");
-      setCountdown(payload.value);
-    });
-    ch.on("broadcast", { event: "race-start" }, ({ payload }: { payload: { startTime: number; text: string } }) => {
-      setText(payload.text);
-      const wl: WordState[] = payload.text.split(" ").map((w: string) => ({ word: w, typed: "", status: "pending" as const }));
-      if (wl.length > 0) wl[0].status = "current";
-      setWords(wl);
-      setCurrentWordIdx(0);
-      setTypedInput("");
-      setCountdown(null);
-      setView("racing");
-      setIsActive(true);
-      setStartTime(payload.startTime);
-      setTimeLeft(timeLimitRef.current);
-      setTimeout(() => inputRef.current?.focus(), 100);
-    });
-    ch.on("broadcast", { event: "player-progress" }, ({ payload }: { payload: { id: string; name: string; wpm: number; progress: number; finished: boolean } }) => {
-      if (payload.id === playerIdRef.current) return;
-      setPlayers((prev) => {
-        const exists = prev.find((p) => p.id === payload.id);
-        if (exists) return prev.map((p) => p.id === payload.id ? { ...p, wpm: payload.wpm, progress: payload.progress, finished: payload.finished } : p);
-        return [...prev, { id: payload.id, name: payload.name, wpm: payload.wpm, progress: payload.progress, color: COLORS[prev.length % COLORS.length], isYou: false, finished: payload.finished }];
-      });
-    });
-    ch.on("broadcast", { event: "race-finish" }, ({ payload }: { payload: { id: string; wpm: number } }) => {
-      setPlayers((prev) => prev.map((p) => p.id === payload.id ? { ...p, wpm: payload.wpm, progress: 100, finished: true } : p));
-    });
-    ch.subscribe((status: string) => {
-      console.log("[CHANNEL] Subscribe status:", status);
-      if (status === "SUBSCRIBED") {
-        setChannelConnected(true);
-        ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", color: myColorRef.current, wpm: 0, progress: 0, finished: false }).then((res: unknown) => {
-          console.log("[CHANNEL] Track result:", res);
-        });
-      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        setChannelConnected(false);
-        console.error("[CHANNEL] Connection failed:", status);
-      }
-    });
-    channelRef.current = ch;
-  }, [nickname]);
+    } catch { /* ignore */ }
+  }, []);
 
-  const broadcastProgress = useCallback((myWpm: number, myProgress: number) => {
-    const ch = channelRef.current;
-    if (ch) ch.send({ type: "broadcast", event: "player-progress", payload: { id: playerIdRef.current, name: nickname || "Anonymous", wpm: myWpm, progress: myProgress, finished: false } });
-    setPlayers((prev) => {
-      const me = prev.find((p) => p.isYou);
-      if (me) return prev.map((p) => p.isYou ? { ...p, wpm: myWpm, progress: myProgress } : p);
-      return [...prev, { id: playerIdRef.current, name: nickname || "Anonymous", wpm: myWpm, progress: myProgress, color: myColorRef.current, isYou: true, finished: false }];
-    });
-  }, [nickname]);
-  const createRoom = () => {
+  const pollRoomState = useCallback(async (code: string) => {
+    try {
+      const res = await fetch("/api/race?code=" + encodeURIComponent(code));
+      if (!res.ok) return;
+      const data = await res.json();
+      const { room, players: dbPlayers } = data;
+
+      const mapped: Player[] = (dbPlayers || []).map((p: Record<string, unknown>) => ({
+        id: p.id as string,
+        name: p.name as string,
+        wpm: (p.wpm as number) || 0,
+        progress: (p.progress as number) || 0,
+        color: (p.color as string) || COLORS[0],
+        isYou: p.id === playerIdRef.current,
+        finished: !!p.finished,
+        is_host: !!p.is_host,
+      }));
+      setPlayers(mapped);
+
+      if (room && room.status === "countdown" && !countdownSeenRef.current && viewRef.current === "lobby") {
+        countdownSeenRef.current = true;
+        const textContent = room.text_content as string;
+        setText(textContent);
+        const wl: WordState[] = textContent.split(" ").map((w: string) => ({ word: w, typed: "", status: "pending" as const }));
+        if (wl.length > 0) wl[0].status = "current";
+        setWords(wl);
+        setCurrentWordIdx(0);
+        setTypedInput("");
+        setView("countdown");
+        setCountdown(3);
+        let count = 3;
+        const cd = setInterval(() => {
+          count--;
+          if (count <= 0) {
+            clearInterval(cd);
+            setCountdown(null);
+            setView("racing");
+            setIsActive(true);
+            setStartTime(Date.now());
+            setTimeLeft(timeLimitRef.current);
+            setTimeout(() => inputRef.current?.focus(), 100);
+          } else {
+            setCountdown(count);
+          }
+        }, 1000);
+        countdownRef.current = cd as unknown as NodeJS.Timeout;
+      }
+    } catch (err) {
+      console.error("[POLL] Error:", err);
+    }
+  }, []);
+
+  const startPolling = useCallback((code: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRoomState(code);
+    pollRef.current = setInterval(() => pollRoomState(code), 1200);
+  }, [pollRoomState]);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  const createRoom = async () => {
     const code = generateRoomCode();
     setRoomCode(code);
     setIsHost(true);
     isHostRef.current = true;
     myColorRef.current = COLORS[0];
     window.history.replaceState({}, "", "?room=" + code);
-    setupRoomChannel(code);
     setView("lobby");
+    await apiPost({ action: "join", code, id: playerIdRef.current, name: nickname || "Host", color: COLORS[0], is_host: true, difficulty, time_limit: timeLimit, language });
+    startPolling(code);
   };
 
-  const autoJoinRoom = useCallback((code: string) => {
+  const autoJoinRoom = useCallback(async (code: string) => {
     setRoomCode(code);
     setIsHost(false);
     isHostRef.current = false;
-    setupRoomChannel(code);
+    myColorRef.current = COLORS[Math.floor(Math.random() * COLORS.length)];
     setView("lobby");
-  }, [nickname]);
+    await apiPost({ action: "join", code, id: playerIdRef.current, name: nickname || "Anonymous", color: myColorRef.current, is_host: false, difficulty: difficultyRef.current, time_limit: timeLimitRef.current, language: languageRef.current });
+    startPolling(code);
+  }, [nickname, apiPost, startPolling]);
 
-  const startRace = () => {
-    const newText = generateText(difficultyRef.current, languageRef.current);
-    let count = 3;
-    const ch = channelRef.current;
-    if (ch) ch.send({ type: "broadcast", event: "countdown", payload: { value: 3 } });
-    setView("countdown");
-    setCountdown(3);
-    const cd = setInterval(() => {
-      count--;
-      if (count <= 0) {
-        clearInterval(cd);
-        setCountdown(null);
-        if (ch) ch.send({ type: "broadcast", event: "race-start", payload: { startTime: Date.now(), text: newText } });
-        setText(newText);
-        const wl: WordState[] = newText.split(" ").map((w) => ({ word: w, typed: "", status: "pending" as const }));
-        if (wl.length > 0) wl[0].status = "current";
-        setWords(wl);
-        setCurrentWordIdx(0);
-        setTypedInput("");
-        setView("racing");
-        setIsActive(true);
-        setStartTime(Date.now());
-        setTimeLeft(timeLimitRef.current);
-        setTimeout(() => inputRef.current?.focus(), 100);
-      } else {
-        setCountdown(count);
-        if (ch) ch.send({ type: "broadcast", event: "countdown", payload: { value: count } });
-      }
-    }, 1000);
-    countdownRef.current = cd as unknown as NodeJS.Timeout;
+  const startRace = async () => {
+    await apiPost({ action: "start", code: roomCodeRef.current, difficulty: difficultyRef.current, language: languageRef.current });
   };
 
   const startTest = useCallback(() => {
@@ -394,15 +345,19 @@ export default function TypingTestPage() {
     const total = curCorrect + curIncorrect;
     const finalAcc = total > 0 ? calculateAccuracy(curCorrect, total) : 0;
     setAccuracy(finalAcc);
-    if (mode === "race" && roomCode) {
-      const ch = channelRef.current;
-      if (ch) ch.send({ type: "broadcast", event: "race-finish", payload: { id: playerIdRef.current, name: nickname || "Anonymous", wpm: curWpm, accuracy: finalAcc } });
+    if (mode === "race" && roomCodeRef.current) {
+      apiPost({ action: "heartbeat", code: roomCodeRef.current, id: playerIdRef.current, wpm: curWpm, progress: 100, finished: true });
     }
+    fetch("/api/race", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "heartbeat", code: roomCodeRef.current, id: playerIdRef.current, wpm: curWpm, progress: 100, finished: true }),
+    }).catch(() => {});
     const supabase = createClient();
     supabase.from("typing_results").insert({ nickname: nickname || "Anonymous", wpm: curWpm, accuracy: finalAcc, difficulty, mode, text_content: text.substring(0, 200), max_wpm: maxWpmRef.current, completed_at: new Date().toISOString(), room_code: roomCode || null })
       .then(({ error }: { error: unknown }) => { if (error) console.error("Save failed:", error); });
     setView("finished");
-  }, [difficulty, mode, text, nickname, roomCode]);
+  }, [difficulty, mode, text, nickname, roomCode, apiPost]);
 
   useEffect(() => { wpmRef.current = wpm; }, [wpm]);
   useEffect(() => { correctCharsRef.current = correctChars; }, [correctChars]);
@@ -435,11 +390,13 @@ export default function TypingTestPage() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (isActive && !isFinished) {
-      broadcastRef.current = setInterval(() => { broadcastProgress(wpmRef.current, progress); }, 200);
+    if (isActive && !isFinished && mode === "race" && roomCodeRef.current) {
+      broadcastRef.current = setInterval(() => {
+        apiPost({ action: "heartbeat", code: roomCodeRef.current, id: playerIdRef.current, wpm: wpmRef.current, progress: progress, finished: false });
+      }, 1500);
     }
     return () => { if (broadcastRef.current) clearInterval(broadcastRef.current); };
-  }, [isActive, isFinished, progress, broadcastProgress]);
+  }, [isActive, isFinished, progress, mode, apiPost]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isActive || isFinished) return;
@@ -461,10 +418,22 @@ export default function TypingTestPage() {
     if (e.key.length === 1) { e.preventDefault(); const cw = words[currentWordIdx]; if (cw) setTypedInput((p) => p + e.key); }
   };
   const copyLink = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000); };
-  const leaveRoom = () => { channelRef.current?.unsubscribe(); channelRef.current = null; setRoomCode(""); setIsHost(false); isHostRef.current = false; setPlayers([]); setChannelConnected(false); setView("setup"); window.history.replaceState({}, "", "/typing-test"); };
+  const leaveRoom = async () => {
+    stopPolling();
+    await apiPost({ action: "leave", code: roomCodeRef.current, id: playerIdRef.current });
+    setRoomCode("");
+    setIsHost(false);
+    isHostRef.current = false;
+    setPlayers([]);
+    countdownSeenRef.current = false;
+    setView("setup");
+    window.history.replaceState({}, "", "/typing-test");
+  };
 
   const resetAll = () => {
+    stopPolling();
     setIsActive(false); setIsFinished(false);
+    countdownSeenRef.current = false;
     setView(mode === "race" && roomCode ? "lobby" : "setup");
     setWpm(0); setAccuracy(100); setMaxWpm(0); maxWpmRef.current = 0; setCorrectChars(0); setIncorrectChars(0);
     if (mode === "solo") { setText(""); setWords([]); setCurrentWordIdx(0); }
@@ -604,12 +573,8 @@ export default function TypingTestPage() {
           </Card>
 
           <Card variant="glass" className="p-4">
-            <div className="text-xs font-bold mb-3 tracking-wider flex items-center justify-between" style={{ color: theme.colors.textMuted }}>
-              <span className="flex items-center gap-2"><Users size={12} /> PEMAIN ({players.length})</span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full" style={{ background: channelConnected ? "#22c55e" : "#ef4444" }} />
-                {channelConnected ? "Connected" : "Connecting..."}
-              </span>
+            <div className="text-xs font-bold mb-3 tracking-wider flex items-center gap-2" style={{ color: theme.colors.textMuted }}>
+              <Users size={12} /> PEMAIN ({players.length})
             </div>
             {players.length === 0 ? (
               <p className="text-sm text-center py-4" style={{ color: theme.colors.textMuted }}>Menunggu pemain...</p>
