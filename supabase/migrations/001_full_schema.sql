@@ -1,11 +1,45 @@
 -- COMBINED: Run this ONE script in Supabase SQL Editor
--- It creates everything from scratch
+-- Drops old tables if they exist, then recreates everything clean
 
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
+-- ============================================================
+-- REMOVE OLD PUBLICATION MEMBERS FIRST (prevents the error)
+-- ============================================================
+DO $$
+BEGIN
+  -- Remove from realtime publication if already added
+  IF EXISTS (SELECT 1 FROM pg_publication_rel WHERE prrelid = 'public.typing_rooms'::regclass) THEN
+    ALTER PUBLICATION supabase_realtime DROP TABLE public.typing_rooms;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_publication_rel WHERE prrelid = 'public.typing_results'::regclass) THEN
+    ALTER PUBLICATION supabase_realtime DROP TABLE public.typing_results;
+  END IF;
+END $$;
+
+-- Drop old tables if they exist (in correct dependency order)
+DROP TABLE IF EXISTS public.typing_broadcasts CASCADE;
+DROP TABLE IF EXISTS public.typing_players CASCADE;
+DROP TABLE IF EXISTS public.typing_results CASCADE;
+DROP TABLE IF EXISTS public.typing_rooms CASCADE;
+DROP TABLE IF EXISTS public.ai_conversations CASCADE;
+DROP TABLE IF EXISTS public.ai_knowledge CASCADE;
+DROP TABLE IF EXISTS public.admin_users CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TABLE IF EXISTS public.notepads CASCADE;
+DROP TABLE IF EXISTS public.links CASCADE;
+DROP TABLE IF EXISTS public.broadcasts CASCADE;
+DROP VIEW IF EXISTS public.leaderboard CASCADE;
+DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
+DROP FUNCTION IF EXISTS public.cleanup_old_rooms() CASCADE;
+
+-- ============================================================
+-- CREATE ALL TABLES
+-- ============================================================
+
 -- Links table
-create table if not exists public.links (
+create table public.links (
   id uuid primary key default uuid_generate_v4(),
   title text not null,
   url text not null,
@@ -19,7 +53,7 @@ create table if not exists public.links (
 );
 
 -- Broadcasts table
-create table if not exists public.broadcasts (
+create table public.broadcasts (
   id uuid primary key default uuid_generate_v4(),
   title text not null,
   content text not null,
@@ -29,7 +63,7 @@ create table if not exists public.broadcasts (
 );
 
 -- Notepads table
-create table if not exists public.notepads (
+create table public.notepads (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade,
   title text,
@@ -40,7 +74,7 @@ create table if not exists public.notepads (
 );
 
 -- Typing results
-create table if not exists public.typing_results (
+create table public.typing_results (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete set null,
   nickname text default 'Anonymous',
@@ -55,7 +89,7 @@ create table if not exists public.typing_results (
 );
 
 -- Typing rooms for multiplayer (host_id is NULLABLE for anonymous)
-create table if not exists public.typing_rooms (
+create table public.typing_rooms (
   id uuid primary key default uuid_generate_v4(),
   room_code text unique not null,
   host_id uuid references auth.users(id) on delete set null,
@@ -69,7 +103,7 @@ create table if not exists public.typing_rooms (
 );
 
 -- AI Knowledge base
-create table if not exists public.ai_knowledge (
+create table public.ai_knowledge (
   id uuid primary key default uuid_generate_v4(),
   topic text not null,
   content text not null,
@@ -79,7 +113,7 @@ create table if not exists public.ai_knowledge (
 );
 
 -- AI Conversations
-create table if not exists public.ai_conversations (
+create table public.ai_conversations (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete set null,
   session_id text not null,
@@ -90,14 +124,14 @@ create table if not exists public.ai_conversations (
 );
 
 -- Admin users
-create table if not exists public.admin_users (
+create table public.admin_users (
   id uuid primary key references auth.users(id) on delete cascade,
   role text not null default 'admin',
   created_at timestamptz default now()
 );
 
 -- Profiles table
-create table if not exists public.profiles (
+create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique,
   display_name text,
@@ -105,7 +139,10 @@ create table if not exists public.profiles (
   created_at timestamptz default now()
 );
 
--- Auto-create profile on signup
+-- ============================================================
+-- FUNCTIONS & TRIGGERS
+-- ============================================================
+
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -119,23 +156,28 @@ begin
 end;
 $$ language plpgsql security definer;
 
-drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- Indexes
-create index if not exists idx_links_category on public.links(category);
-create index if not exists idx_links_active on public.links(is_active);
-create index if not exists idx_broadcasts_active on public.broadcasts(is_active);
-create index if not exists idx_notepads_user on public.notepads(user_id);
-create index if not exists idx_typing_results_user on public.typing_results(user_id);
-create index if not exists idx_typing_results_wpm on public.typing_results(wpm desc);
-create index if not exists idx_typing_rooms_code on public.typing_rooms(room_code);
-create index if not exists idx_ai_conversations_session on public.ai_conversations(session_id);
-create index if not exists idx_profiles_username on public.profiles(username);
+-- ============================================================
+-- INDEXES
+-- ============================================================
 
--- Enable Row Level Security
+create index idx_links_category on public.links(category);
+create index idx_links_active on public.links(is_active);
+create index idx_broadcasts_active on public.broadcasts(is_active);
+create index idx_notepads_user on public.notepads(user_id);
+create index idx_typing_results_user on public.typing_results(user_id);
+create index idx_typing_results_wpm on public.typing_results(wpm desc);
+create index idx_typing_rooms_code on public.typing_rooms(room_code);
+create index idx_ai_conversations_session on public.ai_conversations(session_id);
+create index idx_profiles_username on public.profiles(username);
+
+-- ============================================================
+-- ROW LEVEL SECURITY
+-- ============================================================
+
 alter table public.links enable row level security;
 alter table public.broadcasts enable row level security;
 alter table public.notepads enable row level security;
@@ -146,31 +188,9 @@ alter table public.ai_conversations enable row level security;
 alter table public.admin_users enable row level security;
 alter table public.profiles enable row level security;
 
--- Drop old policies if they exist, then recreate
-drop policy if exists "Links are viewable by everyone" on public.links;
-drop policy if exists "Broadcasts are viewable by everyone" on public.broadcasts;
-drop policy if exists "Admins can manage links" on public.links;
-drop policy if exists "Admins can manage broadcasts" on public.broadcasts;
-drop policy if exists "Users can view own notepads" on public.notepads;
-drop policy if exists "Users can create own notepads" on public.notepads;
-drop policy if exists "Users can update own notepads" on public.notepads;
-drop policy if exists "Users can delete own notepads" on public.notepads;
-drop policy if exists "Anyone can view typing results" on public.typing_results;
-drop policy if exists "Anyone can insert typing results" on public.typing_results;
-drop policy if exists "Anyone can view typing rooms" on public.typing_rooms;
-drop policy if exists "Authenticated users can create rooms" on public.typing_rooms;
-drop policy if exists "Room participants can update rooms" on public.typing_rooms;
-drop policy if exists "Anyone can create typing rooms" on public.typing_rooms;
-drop policy if exists "Anyone can update typing rooms" on public.typing_rooms;
-drop policy if exists "Anyone can read AI knowledge" on public.ai_knowledge;
-drop policy if exists "Admins can manage AI knowledge" on public.ai_knowledge;
-drop policy if exists "Users can view own conversations" on public.ai_conversations;
-drop policy if exists "Anyone can insert conversations" on public.ai_conversations;
-drop policy if exists "Users can update own conversations" on public.ai_conversations;
-drop policy if exists "Profiles are viewable by everyone" on public.profiles;
-drop policy if exists "Users can update own profile" on public.profiles;
-drop policy if exists "Admins viewable by everyone" on public.admin_users;
-drop policy if exists "Super admins can manage admins" on public.admin_users;
+-- ============================================================
+-- POLICIES
+-- ============================================================
 
 -- Policies: links
 create policy "Links are viewable by everyone" on public.links
@@ -232,11 +252,17 @@ create policy "Admins viewable by everyone" on public.admin_users
 create policy "Super admins can manage admins" on public.admin_users
   for all using (exists (select 1 from public.admin_users where id = auth.uid() and role = 'superadmin'));
 
--- Enable Realtime
+-- ============================================================
+-- ENABLE REALTIME (safe now, tables are fresh)
+-- ============================================================
+
 alter publication supabase_realtime add table public.typing_rooms;
 alter publication supabase_realtime add table public.typing_results;
 
--- Leaderboard view
+-- ============================================================
+-- LEADERBOARD VIEW
+-- ============================================================
+
 create or replace view public.leaderboard as
 select
   user_id,
@@ -249,7 +275,10 @@ from public.typing_results
 group by user_id, nickname, difficulty
 order by best_wpm desc;
 
--- Default knowledge base
+-- ============================================================
+-- DEFAULT DATA
+-- ============================================================
+
 insert into public.ai_knowledge (topic, content, category) values
 ('welcome', 'Halo! Saya adalah AI assistant dari Web Utama. Saya bisa membantu menjawab pertanyaan tentang fitur-fitur web ini, memberikan tips, dan membantu menyelesaikan masalah.', 'general'),
 ('typing_test', 'Typing Test memiliki 3 mode difficulty: Easy, Medium, Hard. Waktu: 15s, 30s, 60s, 120s. Solo atau multiplayer race via room code.', 'features'),
