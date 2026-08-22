@@ -87,7 +87,8 @@ function generatePrediksi(market: string) {
   const d2 = Array.from({ length: 10 }, () => randDigits(2)).join(" / ");
   const colokBebas = `${randDigit()} / ${randDigit()}`;
   const colokMacau = `${randDigits(2)} / ${randDigits(2)} / ${randDigits(2)}`;
-  const twin = `${randDigit()}${randDigit()} / ${randDigit()}${randDigit()}`;
+  const twinNum = randDigits(2);
+  const twin = `${twinNum} / ${twinNum}`;
   const shio = `${SHIO[rand(12)]} / ${SHIO[rand(12)]} / ${SHIO[rand(12)]}`;
 
   const now = new Date();

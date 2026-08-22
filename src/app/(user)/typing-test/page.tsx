@@ -306,6 +306,33 @@ export default function TypingTestPage() {
 
   const startRace = async () => {
     await apiPost({ action: "start", code: roomCodeRef.current, difficulty: difficultyRef.current, language: languageRef.current });
+    countdownSeenRef.current = true;
+    const newText = generateText(difficultyRef.current, languageRef.current);
+    setText(newText);
+    const wl: WordState[] = newText.split(" ").map((w) => ({ word: w, typed: "", status: "pending" as const }));
+    if (wl.length > 0) wl[0].status = "current";
+    setWords(wl);
+    setCurrentWordIdx(0);
+    setTypedInput("");
+    setView("countdown");
+    setCountdown(3);
+    let count = 3;
+    const cd = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(cd);
+        setCountdown(null);
+        setView("racing");
+        setIsActive(true);
+        setStartTime(Date.now());
+        setTimeLeft(timeLimitRef.current);
+        setIsFinished(false);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      } else {
+        setCountdown(count);
+      }
+    }, 1000);
+    countdownRef.current = cd as unknown as NodeJS.Timeout;
   };
 
   const startTest = useCallback(() => {
