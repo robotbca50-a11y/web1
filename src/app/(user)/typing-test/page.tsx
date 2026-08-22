@@ -243,8 +243,12 @@ export default function TypingTestPage() {
     if (ch) ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", status, roomCode: room });
   }, [nickname]);
 
+  const joinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const joinAcceptedRef = useRef(false);
+
   const setupRoomChannel = useCallback((code: string) => {
     const supabase = createClient();
+    if (channelRef.current) { channelRef.current.unsubscribe(); }
     myColorRef.current = isHostRef.current ? COLORS[0] : COLORS[Math.min(playersCountRef.current, COLORS.length - 1)];
     const ch = supabase.channel("typing-room:" + code, {
       config: { presence: { key: playerIdRef.current } },
@@ -298,13 +302,23 @@ export default function TypingTestPage() {
         ch.send({ type: "broadcast", event: "join-accepted", payload: { difficulty, timeLimit, language, hostName: nickname || "Host" } });
       }
     });
+    ch.on("broadcast", { event: "join-accepted" }, ({ payload }: { payload: { difficulty: string; timeLimit: number; language: string; hostName: string } }) => {
+      if (!isHostRef.current) {
+        joinAcceptedRef.current = true;
+        if (joinTimeoutRef.current) { clearTimeout(joinTimeoutRef.current); joinTimeoutRef.current = null; }
+        setDifficulty(payload.difficulty as "easy" | "medium" | "hard");
+        setTimeLimit(payload.timeLimit);
+        if (payload.language) setLanguage(payload.language as Language);
+        setView("lobby");
+      }
+    });
     ch.subscribe((status: string) => {
       if (status === "SUBSCRIBED") {
         ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", color: myColorRef.current, wpm: 0, progress: 0, finished: false });
       }
     });
     channelRef.current = ch;
-  }, [nickname, timeLimit]);
+  }, [nickname, timeLimit, difficulty, language]);
 
   const broadcastProgress = useCallback((myWpm: number, myProgress: number) => {
     const ch = channelRef.current;
@@ -330,38 +344,24 @@ export default function TypingTestPage() {
     setRoomCode(roomCodeStr);
     setIsHost(false);
     isHostRef.current = false;
+    joinAcceptedRef.current = false;
     setupRoomChannel(roomCodeStr);
     updateGlobalPresence("in-room", roomCodeStr);
-
-    const supabase = createClient();
-    const ch = supabase.channel("typing-room:" + roomCodeStr, {
-      config: { presence: { key: playerIdRef.current } },
-    });
-
-    ch.on("broadcast", { event: "join-accepted" }, ({ payload }: { payload: { difficulty: string; timeLimit: number; language: string; hostName: string } }) => {
-      setDifficulty(payload.difficulty as "easy" | "medium" | "hard");
-      setTimeLimit(payload.timeLimit);
-      if (payload.language) setLanguage(payload.language as Language);
-      ch.unsubscribe();
-      setView("lobby");
-    });
-
-    ch.subscribe((status: string) => {
-      if (status === "SUBSCRIBED") {
-        ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", color: COLORS[1], wpm: 0, progress: 0, finished: false });
-        setTimeout(() => {
-          ch.send({ type: "broadcast", event: "join-request", payload: { id: playerIdRef.current, name: nickname || "Anonymous" } });
-        }, 500);
-
-        const timeout = setTimeout(() => {
-          ch.unsubscribe();
-          setRoomCode("");
-          setView("setup");
-          alert("Room not found! Pastikan host masih di lobby dan code benar.");
-        }, 5000);
-        ch.on("broadcast", { event: "join-accepted" }, () => clearTimeout(timeout));
+    setTimeout(() => {
+      const ch = channelRef.current;
+      if (ch) ch.send({ type: "broadcast", event: "join-request", payload: { id: playerIdRef.current, name: nickname || "Anonymous" } });
+    }, 800);
+    joinTimeoutRef.current = setTimeout(() => {
+      if (!joinAcceptedRef.current) {
+        const ch = channelRef.current;
+        if (ch) ch.unsubscribe();
+        channelRef.current = null;
+        setRoomCode("");
+        setIsHost(false);
+        setView("setup");
+        alert("Room not found! Pastikan host masih di lobby dan code benar.");
       }
-    });
+    }, 5000);
   };
 
   const acceptInvite = () => {
@@ -507,7 +507,7 @@ export default function TypingTestPage() {
     if (e.key.length === 1) { e.preventDefault(); const cw = words[currentWordIdx]; if (cw) setTypedInput((p) => p + e.key); }
   };
   const copyCode = () => { navigator.clipboard.writeText(roomCode); setCopied(true); setTimeout(() => setCopied(false), 2000); };
-  const leaveRoom = () => { channelRef.current?.unsubscribe(); updateGlobalPresence("browsing"); setRoomCode(""); setIsHost(false); isHostRef.current = false; setPlayers([]); setView("setup"); };
+  const leaveRoom = () => { if (joinTimeoutRef.current) { clearTimeout(joinTimeoutRef.current); joinTimeoutRef.current = null; } joinAcceptedRef.current = false; channelRef.current?.unsubscribe(); channelRef.current = null; updateGlobalPresence("browsing"); setRoomCode(""); setIsHost(false); isHostRef.current = false; setPlayers([]); setView("setup"); };
   const invitePlayer = () => { const ch = globalChannelRef.current; if (ch && roomCode) ch.send({ type: "broadcast", event: "invite", payload: { fromId: playerIdRef.current, fromName: nickname || "Host", roomCode } }); };
 
   const resetAll = () => {
