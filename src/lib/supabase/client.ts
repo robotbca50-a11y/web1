@@ -7,14 +7,19 @@ export function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
-    console.warn("Supabase not configured. Set env vars in Railway dashboard.");
+    console.warn("[SUPABASE] DUMMY CLIENT — env vars missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your deployment dashboard AND redeploy.");
     return createDummyClient();
   }
 
   if (!client) {
+    console.log("[SUPABASE] Real client connecting to:", url);
     client = createBrowserClient(url, key);
   }
   return client;
+}
+
+export function isSupabaseConfigured() {
+  return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
 
 // Dummy client so app doesn't crash when Supabase is unavailable

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme";
 import { getTheme } from "@/lib/themes";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -159,6 +159,7 @@ export default function TypingTestPage() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [leaderboard, setLeaderboard] = useState<TypingResult[]>([]);
+  const [channelConnected, setChannelConnected] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -210,12 +211,22 @@ export default function TypingTestPage() {
   const setupRoomChannel = useCallback((code: string) => {
     const supabase = createClient();
     if (channelRef.current) { channelRef.current.unsubscribe(); }
+    setChannelConnected(false);
     myColorRef.current = isHostRef.current ? COLORS[0] : COLORS[Math.floor(Math.random() * COLORS.length)];
+
+    const selfPlayer: Player = {
+      id: playerIdRef.current, name: nickname || "Anonymous",
+      wpm: 0, progress: 0, color: myColorRef.current, isYou: true, finished: false,
+    };
+    setPlayers([selfPlayer]);
+
+    console.log("[CHANNEL] Creating channel:", "typing-room:" + code, "playerId:", playerIdRef.current);
     const ch = supabase.channel("typing-room:" + code, {
       config: { presence: { key: playerIdRef.current } },
     });
     ch.on("presence", { event: "sync" }, () => {
       const state = ch.presenceState() as Record<string, { id: string; name: string; color: string; wpm: number; progress: number; finished: boolean }[]>;
+      console.log("[CHANNEL] Presence sync, state keys:", Object.keys(state));
       const allPlayers: Player[] = [];
       Object.values(state).forEach((members) => {
         members.forEach((m) => {
@@ -225,7 +236,22 @@ export default function TypingTestPage() {
           });
         });
       });
-      setPlayers(allPlayers);
+      if (allPlayers.length > 0) {
+        setPlayers(allPlayers);
+      } else {
+        setPlayers((prev) => {
+          const hasSelf = prev.some((p) => p.isYou);
+          return hasSelf ? prev : [selfPlayer];
+        });
+      }
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ch.on("presence", { event: "join" }, ({ key, newPresences }: any) => {
+      console.log("[CHANNEL] Presence join:", key, newPresences);
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ch.on("presence", { event: "leave" }, ({ key, leftPresences }: any) => {
+      console.log("[CHANNEL] Presence leave:", key, leftPresences);
     });
     ch.on("broadcast", { event: "countdown" }, ({ payload }: { payload: { value: number } }) => {
       setView("countdown");
@@ -257,8 +283,15 @@ export default function TypingTestPage() {
       setPlayers((prev) => prev.map((p) => p.id === payload.id ? { ...p, wpm: payload.wpm, progress: 100, finished: true } : p));
     });
     ch.subscribe((status: string) => {
+      console.log("[CHANNEL] Subscribe status:", status);
       if (status === "SUBSCRIBED") {
-        ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", color: myColorRef.current, wpm: 0, progress: 0, finished: false });
+        setChannelConnected(true);
+        ch.track({ id: playerIdRef.current, name: nickname || "Anonymous", color: myColorRef.current, wpm: 0, progress: 0, finished: false }).then((res: unknown) => {
+          console.log("[CHANNEL] Track result:", res);
+        });
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        setChannelConnected(false);
+        console.error("[CHANNEL] Connection failed:", status);
       }
     });
     channelRef.current = ch;
@@ -428,7 +461,7 @@ export default function TypingTestPage() {
     if (e.key.length === 1) { e.preventDefault(); const cw = words[currentWordIdx]; if (cw) setTypedInput((p) => p + e.key); }
   };
   const copyLink = () => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000); };
-  const leaveRoom = () => { channelRef.current?.unsubscribe(); channelRef.current = null; setRoomCode(""); setIsHost(false); isHostRef.current = false; setPlayers([]); setView("setup"); window.history.replaceState({}, "", "/typing-test"); };
+  const leaveRoom = () => { channelRef.current?.unsubscribe(); channelRef.current = null; setRoomCode(""); setIsHost(false); isHostRef.current = false; setPlayers([]); setChannelConnected(false); setView("setup"); window.history.replaceState({}, "", "/typing-test"); };
 
   const resetAll = () => {
     setIsActive(false); setIsFinished(false);
@@ -571,8 +604,12 @@ export default function TypingTestPage() {
           </Card>
 
           <Card variant="glass" className="p-4">
-            <div className="text-xs font-bold mb-3 tracking-wider flex items-center gap-2" style={{ color: theme.colors.textMuted }}>
-              <Users size={12} /> PEMAIN ({players.length})
+            <div className="text-xs font-bold mb-3 tracking-wider flex items-center justify-between" style={{ color: theme.colors.textMuted }}>
+              <span className="flex items-center gap-2"><Users size={12} /> PEMAIN ({players.length})</span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full" style={{ background: channelConnected ? "#22c55e" : "#ef4444" }} />
+                {channelConnected ? "Connected" : "Connecting..."}
+              </span>
             </div>
             {players.length === 0 ? (
               <p className="text-sm text-center py-4" style={{ color: theme.colors.textMuted }}>Menunggu pemain...</p>
