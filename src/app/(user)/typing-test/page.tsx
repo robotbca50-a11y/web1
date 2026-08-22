@@ -266,8 +266,12 @@ export default function TypingTestPage() {
 
   const broadcastProgress = useCallback((myWpm: number, myProgress: number) => {
     const ch = channelRef.current;
-    if (!ch) return;
-    ch.send({ type: "broadcast", event: "player-progress", payload: { id: playerIdRef.current, name: nickname || "Anonymous", wpm: myWpm, progress: myProgress, finished: false } });
+    if (ch) ch.send({ type: "broadcast", event: "player-progress", payload: { id: playerIdRef.current, name: nickname || "Anonymous", wpm: myWpm, progress: myProgress, finished: false } });
+    setPlayers((prev) => {
+      const me = prev.find((p) => p.isYou);
+      if (me) return prev.map((p) => p.isYou ? { ...p, wpm: myWpm, progress: myProgress } : p);
+      return [...prev, { id: playerIdRef.current, name: nickname || "Anonymous", wpm: myWpm, progress: myProgress, color: myColorRef.current, isYou: true, finished: false }];
+    });
   }, [nickname]);
   const createRoom = () => {
     const code = generateRoomCode();
