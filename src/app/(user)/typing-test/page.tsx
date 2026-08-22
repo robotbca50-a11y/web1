@@ -187,6 +187,7 @@ export default function TypingTestPage() {
   const wpmRef = useRef(0);
   const correctCharsRef = useRef(0);
   const incorrectCharsRef = useRef(0);
+  const maxWpmRef = useRef(0);
   const viewRef = useRef(view);
   useEffect(() => { viewRef.current = view; }, [view]);
 
@@ -235,7 +236,7 @@ export default function TypingTestPage() {
     });
     globalChannelRef.current = ch;
     return () => { ch.unsubscribe(); };
-  }, [nickname, view]);
+  }, [nickname]);
 
   const updateGlobalPresence = useCallback((status: "browsing" | "in-room", room?: string) => {
     const ch = globalChannelRef.current;
@@ -382,7 +383,7 @@ export default function TypingTestPage() {
     setTypedInput("");
     setTimeLeft(timeLimit);
     setIsFinished(false);
-    setWpm(0); setAccuracy(100); setMaxWpm(0); setCorrectChars(0); setIncorrectChars(0);
+    setWpm(0); setAccuracy(100); setMaxWpm(0); maxWpmRef.current = 0; setCorrectChars(0); setIncorrectChars(0);
     setCountdown(3);
     let count = 3;
     countdownRef.current = setInterval(() => {
@@ -414,14 +415,15 @@ export default function TypingTestPage() {
       updateGlobalPresence("browsing");
     }
     const supabase = createClient();
-    supabase.from("typing_results").insert({ nickname: nickname || "Anonymous", wpm: curWpm, accuracy: finalAcc, difficulty, mode, text_content: text.substring(0, 200), max_wpm: maxWpm, completed_at: new Date().toISOString(), room_code: roomCode || null })
+    supabase.from("typing_results").insert({ nickname: nickname || "Anonymous", wpm: curWpm, accuracy: finalAcc, difficulty, mode, text_content: text.substring(0, 200), max_wpm: maxWpmRef.current, completed_at: new Date().toISOString(), room_code: roomCode || null })
       .then(({ error }: { error: unknown }) => { if (error) console.error("Save failed:", error); });
     setView("finished");
-  }, [difficulty, mode, text, maxWpm, nickname, roomCode, updateGlobalPresence]);
+  }, [difficulty, mode, text, nickname, roomCode, updateGlobalPresence]);
 
   useEffect(() => { wpmRef.current = wpm; }, [wpm]);
   useEffect(() => { correctCharsRef.current = correctChars; }, [correctChars]);
   useEffect(() => { incorrectCharsRef.current = incorrectChars; }, [incorrectChars]);
+  useEffect(() => { maxWpmRef.current = maxWpm; }, [maxWpm]);
 
   useEffect(() => {
     if (isActive && !isFinished) {
@@ -481,7 +483,7 @@ export default function TypingTestPage() {
   const resetAll = () => {
     setIsActive(false); setIsFinished(false);
     setView(mode === "race" && roomCode ? "lobby" : "setup");
-    setWpm(0); setAccuracy(100); setMaxWpm(0); setCorrectChars(0); setIncorrectChars(0);
+    setWpm(0); setAccuracy(100); setMaxWpm(0); maxWpmRef.current = 0; setCorrectChars(0); setIncorrectChars(0);
     if (mode === "solo") { setText(""); setWords([]); setCurrentWordIdx(0); }
   };
 
